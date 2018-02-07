@@ -1,0 +1,70 @@
+{
+  "name": "@barchart/user-configuration-client-js",
+  "version": "1.0.0",
+  "description": "JavaScript library for interfacing with Barchart's User Configuration System",
+  "author": {
+    "name": "Bryan Ingle",
+    "email": "bryan.ingle@barchart.com",
+    "url": "http://www.barchart.com"
+  },
+  "scripts": {
+    "test": "echo \"Error: Please use gulp to run tests\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/barchart/barchart/user-configuration-client-js.git"
+  },
+  "keywords": [
+    "Barchart",
+    "JavaScript",
+    "Client",
+    "API"
+  ],
+  "dependencies": {
+    "@barchart/common-client-js": "1.1.13",
+    "@barchart/common-js": "3.2.19",
+    "@barchart/jwt-tgam-js": "1.0.10"
+  },
+  "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-preset-es2015": "^6.24.1",
+    "babelify": "^8.0.0",
+    "browserify": "^14.5.0",
+    "git-get-status": "^1.0.5",
+    "glob": "^6.0.1",
+    "gulp": "~3.9.0",
+    "gulp-bump": "~1.0.0",
+    "gulp-git": "~1.6.0",
+    "gulp-jasmine": "^2.2.1",
+    "gulp-jsdoc3": "^1.0.1",
+    "gulp-jshint": "~1.11.2",
+    "gulp-rename": "^1.2.2",
+    "gulp-replace": "^0.5.4",
+    "gulp-util": "^3.0.7",
+    "jsdoc": "^3.5.5",
+    "run-sequence": "~1.1.4",
+    "vinyl-buffer": "^1.0.0",
+    "vinyl-source-stream": "^1.1.0",
+    "vinyl-transform": "^1.0.0"
+  },
+  "browserify": {
+    "transform": [
+      [
+        "babelify",
+        {
+          "presets": [
+            "es2015"
+          ]
+        }
+      ]
+    ]
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/barchart/user-configuration-client-js/issues"
+  },
+  "homepage": "https://github.com/barchart/user-configuration-client-js#readme",
+  "directories": {
+    "test": "test"
+  }
+}

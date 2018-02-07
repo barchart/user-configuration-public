@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+
+    <title>Barchart User Configuration Client API</title>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+    <link rel="stylesheet" href="example.css" type="text/css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.23.0/polyfill.min.js"></script>
+
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+    <script src="example.js"></script>
+
+    <script type="text/javascript">
+		'use strict';
+
+		var PageModel = function() {
+			var that = this;
+
+			that.gateway = null;
+
+			that.protocol = ko.observable('https');
+			that.host = ko.observable('54eorn43h5.execute-api.us-east-1.amazonaws.com/dev');
+			that.port = ko.observable(443);
+
+			that.user = ko.observable('14172034');
+            that.data = ko.observable(null);
+
+			that.connected = ko.observable(false);
+			that.connecting = ko.observable(false);
+
+			that.loaded = ko.computed(function() {
+				return that.data() !== null;
+            });
+
+			that.console = ko.observableArray([ ]);
+
+			that.clientVersion = ko.observable();
+
+			that.activeTemplate = ko.observable('disconnected-template');
+
+			that.canConnect = ko.computed(function() {
+				return !that.connecting() && !that.connected();
+			});
+			that.canDisconnect = ko.computed(function() {
+				return that.connected();
+			});
+
+			var writeConsoleText = function(text) {
+				that.console.push(text);
+			};
+
+			var writeConsoleObject = function(data) {
+				that.console.push(JSON.stringify(data, null, 2));
+			};
+
+			that.connect = function() {
+				that.disconnect();
+
+				if (!that.host()) {
+					return;
+				}
+
+				that.connecting(true);
+
+				Barchart.Jwt.JwtProvider.forDevelopment(that.host(), that.user())
+                    .then((jwtGateway) => {
+	                    that.gateway = new Barchart.UserConfiguration.UserConfigurationGateway();
+
+	                    var action = 'userConfigurationGateway.start()';
+
+	                    that.gateway.start(that.protocol(), that.host(), that.port(), jwtGateway.toRequestInterceptor())
+                            .then((result) => {
+                                writeConsoleText(action);
+                                writeConsoleObject(result);
+
+                                that.connecting(false);
+                                that.connected(true);
+
+                                that.clientVersion(Barchart.UserConfiguration.version);
+
+                                that.activeTemplate('console-template');
+
+                                return true;
+                            }).catch((e) => {
+	                    	    console.log(e);
+
+                                writeConsoleText(action);
+                                writeConsoleObject(e);
+
+                                return false;
+                            }).then((read) => {
+                                if (read) {
+                                    return that.readConfiguration(false);
+                                }
+                            });
+                    });
+			};
+			that.disconnect = function() {
+				if (that.gateway === null) {
+					return;
+                }
+
+                if (that.gateway) {
+	                that.gateway.dispose();
+	                that.gateway = null;
+                }
+
+				that.console.removeAll();
+				
+				that.data(null);
+
+				that.connecting(false);
+				that.connected(false);
+
+				that.activeTemplate('disconnected-template');
+			};
+
+			that.readConfiguration = function(clear) {
+				if (clear) {
+					that.console.removeAll();
+				}
+
+				var action = 'userConfigurationGateway.readConfiguration()';
+
+				return that.gateway.readConfiguration()
+                    .then(function(data) {
+                        writeConsoleText(action);
+                        writeConsoleObject(data);
+
+	                    that.data(data);
+                    }).catch((e) => {
+                        writeConsoleText(action);
+                        writeConsoleText(e);
+
+                        that.data(null);
+                    });
+			};
+
+			that.handleLoginKeypress = function(d, e) {
+				var enterKey = e.keyCode === 13;
+
+				if (enterKey) {
+					that.connect();
+				}
+
+				return !enterKey;
+			};
+		};
+
+		$(document).ready(function() {
+			var pageModel = new PageModel();
+
+            ko.applyBindings(pageModel, $('body')[0]);
+		});
+    </script>
+
+    <script type="text/html" id="disconnected-template">
+        <div class="container-center-outer">
+            <div class="container-center-inner">
+                <form class="form-horizontal login">
+                    <div class="form-group" data-bind="css: { 'has-error': host().length === 0 }, event: { keypress: handleLoginKeypress }">
+                        <label class="pull-left">Host</label>
+                        <input class="form-control" data-bind="textInput: host" type="text" placeholder="Server">
+                    </div>
+                    <div class="form-group" data-bind="css: { 'has-error': user().length === 0 }, event: { keypress: handleLoginKeypress }">
+                        <label class="pull-left">User</label>
+                        <input class="form-control" data-bind="textInput: user" type="text" placeholder="User">
+                    </div>
+                    <div class="form-group buttons">
+                        <button class="form-control btn btn-primary" type="button" data-bind="click: connect, enable: canConnect">Connect</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </script>
+
+    <script type="text/html" id="header-template">
+        <div class="pull-left">
+            <h4 class="pull-left">Barchart User Configuration API <span data-bind="visible: connected"> -- <span data-bind="text: user"></span></span></h4>
+        </div>
+
+        <div class="pull-right">
+            <div class="header-action-buttons pull-right form-inline" data-bind="visible: connected() === true && loaded() === true">
+                <span class="text-button glyphicon glyphicon-remove" data-bind="click: disconnect"></span>
+            </div>
+        </div>
+    </script>
+
+    <script type="text/html" id="console-template">
+        <div data-bind="foreach: console">
+            <pre data-bind="text: $data" style="font-size: 10px;"></pre>
+        </div>
+    </script>
+
+    <script type="text/html" id="footer-template">
+        <h4 class="pull-left" data-bind="visible: connected">
+            <span><span data-bind="text: host"></span>:<span data-bind="text: port"></span></span>
+        </h4>
+        <h4 class="pull-right">Client Version: <span data-bind="text: clientVersion"></span></h4>
+    </script>
+</head>
+<body>
+<div class="header" data-bind="template: { name: 'header-template' }"></div>
+<div class="main" data-bind="template: { name: activeTemplate }"></div>
+<div class="footer" data-bind="template: { name: 'footer-template' }">
+</div>
+</body>
+</html>
