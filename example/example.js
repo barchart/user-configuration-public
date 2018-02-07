@@ -96,7 +96,7 @@ module.exports = function () {
 
 						_this2._readConfigurationEndpoint = EndpointBuilder.for('read-user').withVerb(VerbType.GET).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
 							return pb.withLiteralParameter('v1').withLiteralParameter('user');
-						}).withRequestInterceptor(requestInterceptorToUse).endpoint;
+						}).withRequestInterceptor(requestInterceptorToUse).withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
 
 						_this2._writeConfigurationEndpoint = EndpointBuilder.for('write-user').withVerb(VerbType.PUT).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
 							return pb.withLiteralParameter('v1').withLiteralParameter('user');
