@@ -26,10 +26,6 @@
 
 			that.gateway = null;
 
-			that.protocol = ko.observable('https');
-			that.host = ko.observable('6q974cgbv4.execute-api.us-east-1.amazonaws.com/dev');
-			that.port = ko.observable(443);
-
 			that.user = ko.observable('113692067');
             that.data = ko.observable(null);
 
@@ -64,43 +60,30 @@
 			that.connect = function() {
 				that.disconnect();
 
-				if (!that.host()) {
-					return;
-				}
-
 				that.connecting(true);
 
-				Barchart.Jwt.JwtProvider.forDevelopment(that.host(), that.user())
-                    .then((jwtGateway) => {
-	                    that.gateway = new Barchart.UserConfiguration.UserConfigurationGateway();
+				Barchart.UserConfiguration.UserConfigurationGateway.forDevelopment(Barchart.Jwt.JwtProvider.forDevelopmentClient(that.user()))
+                    .then((gateway) => {
+						that.gateway = gateway;
 
-	                    var action = 'userConfigurationGateway.start()';
+                        that.connecting(false);
+                        that.connected(true);
 
-	                    that.gateway.start(that.protocol(), that.host(), that.port(), jwtGateway.toRequestInterceptor())
-                            .then((result) => {
-                                writeConsoleText(action);
-                                writeConsoleObject(result);
+                        that.clientVersion(Barchart.UserConfiguration.version);
 
-                                that.connecting(false);
-                                that.connected(true);
+                        that.activeTemplate('console-template');
 
-                                that.clientVersion(Barchart.UserConfiguration.version);
+                        return true;
+                    }).catch((e) => {
+                        console.log(e);
 
-                                that.activeTemplate('console-template');
+                        writeConsoleObject(e);
 
-                                return true;
-                            }).catch((e) => {
-	                    	    console.log(e);
-
-                                writeConsoleText(action);
-                                writeConsoleObject(e);
-
-                                return false;
-                            }).then((read) => {
-                                if (read) {
-                                    return that.readConfiguration(false);
-                                }
-                            });
+                        return false;
+                    }).then((started) => {
+                        if (started) {
+                            return that.readConfiguration(false);
+                        }
                     });
 			};
 			that.disconnect = function() {
@@ -166,10 +149,6 @@
         <div class="container-center-outer">
             <div class="container-center-inner">
                 <form class="form-horizontal login">
-                    <div class="form-group" data-bind="css: { 'has-error': host().length === 0 }, event: { keypress: handleLoginKeypress }">
-                        <label class="pull-left">Host</label>
-                        <input class="form-control" data-bind="textInput: host" type="text" placeholder="Server">
-                    </div>
                     <div class="form-group" data-bind="css: { 'has-error': user().length === 0 }, event: { keypress: handleLoginKeypress }">
                         <label class="pull-left">User</label>
                         <input class="form-control" data-bind="textInput: user" type="text" placeholder="User">
@@ -202,7 +181,6 @@
 
     <script type="text/html" id="footer-template">
         <h4 class="pull-left" data-bind="visible: connected">
-            <span><span data-bind="text: host"></span>:<span data-bind="text: port"></span></span>
         </h4>
         <h4 class="pull-right">Client Version: <span data-bind="text: clientVersion"></span></h4>
     </script>
