@@ -41,13 +41,17 @@ module.exports = function () {
   * Web service gateway for invoking user configuration data storage service.
   *
   * @public
+  * @param {String} protocol - The protocol to use (either HTTP or HTTPS).
+  * @param {String} host - The host name of the Watchlist web service.
+  * @param {Number} port - The TCP port number of the Watchlist web service.
+  * @param {RequestInterceptor=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
   * @extends {Disposable}
   */
 
 	var UserConfigurationGateway = function (_Disposable) {
 		_inherits(UserConfigurationGateway, _Disposable);
 
-		function UserConfigurationGateway() {
+		function UserConfigurationGateway(protocol, host, port, requestInterceptor) {
 			_classCallCheck(this, UserConfigurationGateway);
 
 			var _this = _possibleConstructorReturn(this, (UserConfigurationGateway.__proto__ || Object.getPrototypeOf(UserConfigurationGateway)).call(this));
@@ -55,56 +59,51 @@ module.exports = function () {
 			_this._started = false;
 			_this._startPromise = null;
 
-			_this._readConfigurationEndpoint = null;
-			_this._writeConfigurationEndpoint = null;
+			var protocolType = Enum.fromCode(ProtocolType, protocol.toUpperCase());
+
+			var requestInterceptorToUse = void 0;
+
+			if (requestInterceptor) {
+				requestInterceptorToUse = requestInterceptor;
+			} else {
+				requestInterceptorToUse = RequestInterceptor.EMPTY;
+			}
+
+			_this._readConfigurationEndpoint = EndpointBuilder.for('read-user').withVerb(VerbType.GET).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
+				return pb.withLiteralParameter('v1').withLiteralParameter('user');
+			}).withRequestInterceptor(requestInterceptorToUse).withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
+
+			_this._writeConfigurationEndpoint = EndpointBuilder.for('write-user').withVerb(VerbType.PUT).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
+				return pb.withLiteralParameter('v1').withLiteralParameter('user');
+			}).withEntireBody().withRequestInterceptor(requestInterceptorToUse).endpoint;
 			return _this;
 		}
 
 		/**
-   * Initializes the connection to the remote server and returns a promise.
+   * Initializes the connection to the remote server and returns a promise
+   * containing the current instance.
    *
    * @public
-   * @param {String} protocol - The protocol to use (either HTTP or HTTPS).
-   * @param {String} host - The host name of the Watchlist web service.
-   * @param {Number} port - The TCP port number of the Watchlist web service.
-   * @param {RequestInterceptor=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
-   * @returns {Promise.<Boolean>}
+   * @returns {Promise.<UserConfigurationGateway>}
    */
 
 
 		_createClass(UserConfigurationGateway, [{
 			key: 'start',
-			value: function start(protocol, host, port, requestInterceptor) {
+			value: function start() {
 				var _this2 = this;
 
 				return Promise.resolve().then(function () {
 					if (_this2._startPromise === null) {
-						assert.argumentIsRequired(protocol, 'protocol', String);
-						assert.argumentIsRequired(host, 'host', String);
-						assert.argumentIsRequired(port, 'port', Number);
-						assert.argumentIsOptional(requestInterceptor, 'requestInterceptor', RequestInterceptor, 'RequestInterceptor');
+						_this2._startPromise = Promise.resolve().then(function () {
+							_this2._started = true;
 
-						var protocolType = Enum.fromCode(ProtocolType, protocol.toUpperCase());
+							return _this2;
+						}).catch(function (e) {
+							_this2._startPromise = null;
 
-						var requestInterceptorToUse = void 0;
-
-						if (requestInterceptor) {
-							requestInterceptorToUse = requestInterceptor;
-						} else {
-							requestInterceptorToUse = RequestInterceptor.EMPTY;
-						}
-
-						_this2._readConfigurationEndpoint = EndpointBuilder.for('read-user').withVerb(VerbType.GET).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
-							return pb.withLiteralParameter('v1').withLiteralParameter('user');
-						}).withRequestInterceptor(requestInterceptorToUse).withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
-
-						_this2._writeConfigurationEndpoint = EndpointBuilder.for('write-user').withVerb(VerbType.PUT).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
-							return pb.withLiteralParameter('v1').withLiteralParameter('user');
-						}).withEntireBody().withRequestInterceptor(requestInterceptorToUse).endpoint;
-
-						_this2._started = true;
-
-						return _this2._started;
+							throw e;
+						});
 					}
 
 					return _this2._startPromise;
@@ -151,6 +150,16 @@ module.exports = function () {
 					return Gateway.invoke(_this4._writeConfigurationEndpoint, data);
 				});
 			}
+
+			/**
+    * Creates and starts a new {@link UserConfigurationGateway} for use in the development environment.
+    *
+    * @public
+    * @static
+    * @param {RequestInterceptor=|Promise.<RequestInterceptor>=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
+    * @returns {Promise.<UserConfigurationGateway>}
+    */
+
 		}, {
 			key: '_onDispose',
 			value: function _onDispose() {
@@ -161,10 +170,44 @@ module.exports = function () {
 			value: function toString() {
 				return '[UserConfigurationGateway]';
 			}
+		}], [{
+			key: 'forDevelopment',
+			value: function forDevelopment(requestInterceptor) {
+				return Promise.resolve(requestInterceptor).then(function (requestInterceptor) {
+					assert.argumentIsOptional(requestInterceptor, 'requestInterceptor', RequestInterceptor, 'RequestInterceptor');
+
+					return start(new UserConfigurationGateway('https', '6q974cgbv4.execute-api.us-east-1.amazonaws.com/dev', 443, requestInterceptor));
+				});
+			}
+
+			/**
+    * Creates and starts a new {@link UserConfigurationGateway} for use in the production environment.
+    *
+    * @public
+    * @static
+    * @param {RequestInterceptor=|Promise.<RequestInterceptor>=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
+    * @returns {Promise.<UserConfigurationGateway>}
+    */
+
+		}, {
+			key: 'forProduction',
+			value: function forProduction(requestInterceptor) {
+				return Promise.resolve(requestInterceptor).then(function (requestInterceptor) {
+					assert.argumentIsOptional(requestInterceptor, 'requestInterceptor', RequestInterceptor, 'RequestInterceptor');
+
+					return start(new UserConfigurationGateway('https', '6q974cgbv4.execute-api.us-east-1.amazonaws.com/dev', 443, requestInterceptor));
+				});
+			}
 		}]);
 
 		return UserConfigurationGateway;
 	}(Disposable);
+
+	function start(gateway) {
+		return gateway.start().then(function () {
+			return gateway;
+		});
+	}
 
 	function checkStart() {
 		if (this.getIsDisposed()) {
@@ -189,7 +232,7 @@ module.exports = function () {
 
 	return {
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.0.1'
+		version: '1.0.2'
 	};
 }();
 
@@ -3890,6 +3933,7 @@ var assert = require('@barchart/common-js/lang/assert'),
     Scheduler = require('@barchart/common-js/timing/Scheduler');
 
 var EndpointBuilder = require('@barchart/common-client-js/http/builders/EndpointBuilder'),
+    Endpoint = require('@barchart/common-client-js/http/definitions/Endpoint'),
     Gateway = require('@barchart/common-client-js/http/Gateway'),
     ProtocolType = require('@barchart/common-client-js/http/definitions/ProtocolType'),
     RequestInterceptor = require('@barchart/common-client-js/http/interceptors/RequestInterceptor'),
@@ -3903,19 +3947,26 @@ module.exports = function () {
   * Web service gateway for invoking the Watchlist API.
   *
   * @public
+  * @param {Enpoint} endpoint
+  * @param {Number=} refreshInterval - Interval, in milliseconds, which a token refresh should occur. If zero, the token does not need to be refreshed.
   * @extends {Disposable}
   */
 
 	var JwtGateway = function (_Disposable) {
 		_inherits(JwtGateway, _Disposable);
 
-		function JwtGateway(endpoint) {
+		function JwtGateway(endpoint, refreshInterval) {
 			_classCallCheck(this, JwtGateway);
 
 			var _this = _possibleConstructorReturn(this, (JwtGateway.__proto__ || Object.getPrototypeOf(JwtGateway)).call(this));
 
+			assert.argumentIsRequired(endpoint, 'endpoint', Endpoint, 'Endpoint');
+			assert.argumentIsOptional(refreshInterval, 'refreshInterval', Number);
+
 			_this._started = false;
 			_this._startPromise = null;
+
+			_this._refreshInterval = refreshInterval || null;
 
 			_this._endpoint = endpoint;
 			return _this;
@@ -3923,10 +3974,10 @@ module.exports = function () {
 
 		/**
    * Initializes the connection to the remote server and returns a promise
-   * containing the server's metadata.
+   * containing the current instance
    *
    * @public
-   * @returns {Promise.<Boolean>}
+   * @returns {Promise.<JwtGateway>}
    */
 
 
@@ -3940,7 +3991,11 @@ module.exports = function () {
 						_this2._startPromise = Promise.resolve().then(function () {
 							_this2._started = true;
 
-							return _this2._started;
+							return _this2;
+						}).catch(function (e) {
+							_this2._startPromise = null;
+
+							throw e;
 						});
 					}
 
@@ -3971,16 +4026,13 @@ module.exports = function () {
     * Returns a {@link RequestInterceptor} suitable for use with other API calls.
     *
     * @public
-    * @param {Number=} refreshInterval - Interval, in milliseconds, for refreshing cached token. If zero, no caching is used.
     * @returns {RequestInterceptor}
     */
 
 		}, {
 			key: 'toRequestInterceptor',
-			value: function toRequestInterceptor(refreshInterval) {
+			value: function toRequestInterceptor() {
 				var _this4 = this;
-
-				assert.argumentIsOptional(refreshInterval, 'refreshInterval', Number);
 
 				var scheduler = new Scheduler();
 
@@ -3992,12 +4044,12 @@ module.exports = function () {
 
 				var cachePromise = null;
 
-				if (refreshInterval > 0) {
+				if (this._refreshInterval > 0) {
 					cachePromise = refreshToken();
 
 					scheduler.repeat(function () {
 						return cachePromise = refreshToken();
-					});
+					}, this._refreshInterval, 'Refresh JWT token');
 				}
 
 				var delegate = function delegate(options) {
@@ -4025,8 +4077,7 @@ module.exports = function () {
     *
     * @public
     * @static
-    * @param {String} host
-    * @param {String} userId
+    * @param {String} userId - The identifier of the user to impersonate.
     * @returns {Promise.<JwtGateway>}
     */
 
@@ -4042,22 +4093,25 @@ module.exports = function () {
 			}
 		}], [{
 			key: 'forDevelopment',
-			value: function forDevelopment(host, userId) {
-				return start(new JwtGateway(_forDevelopment(host, userId)));
+			value: function forDevelopment(userId) {
+				return start(new JwtGateway(_forDevelopment('54eorn43h5.execute-api.us-east-1.amazonaws.com/dev', userId), 60000));
 			}
 
 			/**
-    * Creates and starts a new {@link JwtGateway} for use in the staging environment.
+    * Creates and starts a new {@link RequestInterceptor} for use in the development environment.
     *
     * @public
     * @static
-    * @returns {Promise.<JwtGateway>}
+    * @param {String} userId - The identifier of the user to impersonate.
+    * @returns {Promise.<RequestInterceptor>}
     */
 
 		}, {
-			key: 'forStaging',
-			value: function forStaging() {
-				return start(new JwtGateway(_forProduction('gamservices.stg2.theglobeandmail.com/usermanagement/public/v3/user/sso')));
+			key: 'forDevelopmentClient',
+			value: function forDevelopmentClient(userId) {
+				return JwtGateway.forDevelopment(userId).then(function (jwtGateway) {
+					return jwtGateway.toRequestInterceptor();
+				});
 			}
 
 			/**
@@ -4071,7 +4125,24 @@ module.exports = function () {
 		}, {
 			key: 'forProduction',
 			value: function forProduction() {
-				return start(new JwtGateway(_forProduction('gamservices.stg2.theglobeandmail.com/usermanagement/public/v3/user/sso')));
+				return start(new JwtGateway(_forProduction('gamservices.stg2.theglobeandmail.com/usermanagement/public/v3/user/sso'), 300000));
+			}
+
+			/**
+    * Creates and starts a new {@link RequestInterceptor} for use in the development environment.
+    *
+    * @public
+    * @static
+    * @param {String} userId - The identifier of the user to impersonate.
+    * @returns {Promise.<RequestInterceptor>}
+    */
+
+		}, {
+			key: 'forProductionClient',
+			value: function forProductionClient() {
+				return JwtGateway.forProduction().then(function (jwtGateway) {
+					return jwtGateway.toRequestInterceptor();
+				});
 			}
 		}]);
 
@@ -4111,7 +4182,7 @@ module.exports = function () {
 	return JwtGateway;
 }();
 
-},{"@barchart/common-client-js/http/Gateway":4,"@barchart/common-client-js/http/builders/EndpointBuilder":5,"@barchart/common-client-js/http/definitions/ProtocolType":12,"@barchart/common-client-js/http/definitions/VerbType":13,"@barchart/common-client-js/http/interceptors/RequestInterceptor":16,"@barchart/common-client-js/http/interceptors/ResponseInterceptor":17,"@barchart/common-js/lang/Disposable":18,"@barchart/common-js/lang/Enum":19,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23,"@barchart/common-js/timing/Scheduler":26}],28:[function(require,module,exports){
+},{"@barchart/common-client-js/http/Gateway":4,"@barchart/common-client-js/http/builders/EndpointBuilder":5,"@barchart/common-client-js/http/definitions/Endpoint":9,"@barchart/common-client-js/http/definitions/ProtocolType":12,"@barchart/common-client-js/http/definitions/VerbType":13,"@barchart/common-client-js/http/interceptors/RequestInterceptor":16,"@barchart/common-client-js/http/interceptors/ResponseInterceptor":17,"@barchart/common-js/lang/Disposable":18,"@barchart/common-js/lang/Enum":19,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23,"@barchart/common-js/timing/Scheduler":26}],28:[function(require,module,exports){
 module.exports = require('./lib/axios');
 },{"./lib/axios":30}],29:[function(require,module,exports){
 (function (process){
