@@ -1,4 +1,4 @@
-const JwtGateway = require('@barchart/jwt-tgam-js/lib/JwtGateway');
+const JwtGateway = require('@barchart/tgam-jwt-js/lib/JwtGateway');
 
 module.exports = (() => {
 	'use strict';
