@@ -1,7 +1,7 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}(g.Barchart || (g.Barchart = {})).UserConfiguration = f()}})(function(){var define,module,exports;return (function(){function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s}return e})()({1:[function(require,module,exports){
 'use strict';
 
-var JwtGateway = require('@barchart/jwt-tgam-js/lib/JwtGateway');
+var JwtGateway = require('@barchart/tgam-jwt-js/lib/JwtGateway');
 
 module.exports = function () {
 	'use strict';
@@ -11,7 +11,7 @@ module.exports = function () {
 	window.Barchart.Jwt.JwtProvider = JwtGateway;
 }();
 
-},{"@barchart/jwt-tgam-js/lib/JwtGateway":27}],2:[function(require,module,exports){
+},{"@barchart/tgam-jwt-js/lib/JwtGateway":27}],2:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -195,7 +195,7 @@ module.exports = function () {
 				return Promise.resolve(requestInterceptor).then(function (requestInterceptor) {
 					assert.argumentIsOptional(requestInterceptor, 'requestInterceptor', RequestInterceptor, 'RequestInterceptor');
 
-					return start(new UserConfigurationGateway('https', '6q974cgbv4.execute-api.us-east-1.amazonaws.com/dev', 443, requestInterceptor));
+					return start(new UserConfigurationGateway('https', 'a8q3ptjwi6.execute-api.us-east-1.amazonaws.com/prod', 443, requestInterceptor));
 				});
 			}
 		}]);
@@ -232,7 +232,7 @@ module.exports = function () {
 
 	return {
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.0.2'
+		version: '1.0.3'
 	};
 }();
 
@@ -4176,7 +4176,13 @@ module.exports = function () {
 	function _forProduction(host) {
 		return EndpointBuilder.for('read-jwt-token-for-production').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHeadersBuilder(function (hb) {
 			return hb.withLiteralParameter('X-GAM-CLIENT-APP-ID', '1348').withLiteralParameter('X-GAM-CLIENT-APP-SECRET', '1bcc5c85-e833-4936-9313-abe5dfdcef76');
-		}).withHost(host).withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
+		}).withHost(host).withRequestInterceptor(RequestInterceptor.fromDelegate(function (request) {
+			request.withCredentials = true;
+
+			return request;
+		})).withResponseInterceptor(ResponseInterceptor.DATA).withResponseInterceptor(ResponseInterceptor.fromDelegate(function (response) {
+			return response.token;
+		})).endpoint;
 	}
 
 	return JwtGateway;
