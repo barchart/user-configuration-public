@@ -11,7 +11,7 @@ module.exports = function () {
 	window.Barchart.Jwt.JwtProvider = JwtGateway;
 }();
 
-},{"@barchart/tgam-jwt-js/lib/JwtGateway":27}],2:[function(require,module,exports){
+},{"@barchart/tgam-jwt-js/lib/JwtGateway":31}],2:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -27,12 +27,13 @@ var assert = require('@barchart/common-js/lang/assert'),
     Enum = require('@barchart/common-js/lang/Enum'),
     is = require('@barchart/common-js/lang/is');
 
-var EndpointBuilder = require('@barchart/common-client-js/http/builders/EndpointBuilder'),
-    Gateway = require('@barchart/common-client-js/http/Gateway'),
-    ProtocolType = require('@barchart/common-client-js/http/definitions/ProtocolType'),
-    RequestInterceptor = require('@barchart/common-client-js/http/interceptors/RequestInterceptor'),
-    ResponseInterceptor = require('@barchart/common-client-js/http/interceptors/ResponseInterceptor'),
-    VerbType = require('@barchart/common-client-js/http/definitions/VerbType');
+var EndpointBuilder = require('@barchart/common-js/api/http/builders/EndpointBuilder'),
+    Gateway = require('@barchart/common-js/api/http/Gateway'),
+    ProtocolType = require('@barchart/common-js/api/http/definitions/ProtocolType'),
+    ErrorInterceptor = require('@barchart/common-js/api/http/interceptors/ErrorInterceptor'),
+    RequestInterceptor = require('@barchart/common-js/api/http/interceptors/RequestInterceptor'),
+    ResponseInterceptor = require('@barchart/common-js/api/http/interceptors/ResponseInterceptor'),
+    VerbType = require('@barchart/common-js/api/http/definitions/VerbType');
 
 module.exports = function () {
 	'use strict';
@@ -69,13 +70,13 @@ module.exports = function () {
 				requestInterceptorToUse = RequestInterceptor.EMPTY;
 			}
 
-			_this._readConfigurationEndpoint = EndpointBuilder.for('read-user').withVerb(VerbType.GET).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
-				return pb.withLiteralParameter('v1').withLiteralParameter('user');
-			}).withRequestInterceptor(requestInterceptorToUse).withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
+			_this._readConfigurationEndpoint = EndpointBuilder.for('read-user', 'read your preferences').withVerb(VerbType.GET).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
+				return pb.withLiteralParameter('version', 'v1').withLiteralParameter('user', 'user');
+			}).withRequestInterceptor(requestInterceptorToUse).withResponseInterceptor(ResponseInterceptor.DATA).withErrorInterceptor(ErrorInterceptor.GENERAL).endpoint;
 
-			_this._writeConfigurationEndpoint = EndpointBuilder.for('write-user').withVerb(VerbType.PUT).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
-				return pb.withLiteralParameter('v1').withLiteralParameter('user');
-			}).withEntireBody().withRequestInterceptor(requestInterceptorToUse).endpoint;
+			_this._writeConfigurationEndpoint = EndpointBuilder.for('write-user', 'save your preferences').withVerb(VerbType.PUT).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(function (pb) {
+				return pb.withLiteralParameter('version', 'v1').withLiteralParameter('user', 'user');
+			}).withBody('user preference data').withRequestInterceptor(requestInterceptorToUse).withErrorInterceptor(ErrorInterceptor.GENERAL).endpoint;
 			return _this;
 		}
 
@@ -222,7 +223,7 @@ module.exports = function () {
 	return UserConfigurationGateway;
 }();
 
-},{"@barchart/common-client-js/http/Gateway":4,"@barchart/common-client-js/http/builders/EndpointBuilder":5,"@barchart/common-client-js/http/definitions/ProtocolType":12,"@barchart/common-client-js/http/definitions/VerbType":13,"@barchart/common-client-js/http/interceptors/RequestInterceptor":16,"@barchart/common-client-js/http/interceptors/ResponseInterceptor":17,"@barchart/common-js/lang/Disposable":18,"@barchart/common-js/lang/Enum":19,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],3:[function(require,module,exports){
+},{"@barchart/common-js/api/http/Gateway":7,"@barchart/common-js/api/http/builders/EndpointBuilder":8,"@barchart/common-js/api/http/definitions/ProtocolType":13,"@barchart/common-js/api/http/definitions/VerbType":14,"@barchart/common-js/api/http/interceptors/ErrorInterceptor":18,"@barchart/common-js/api/http/interceptors/RequestInterceptor":19,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":20,"@barchart/common-js/lang/Disposable":22,"@barchart/common-js/lang/Enum":23,"@barchart/common-js/lang/assert":25,"@barchart/common-js/lang/is":27}],3:[function(require,module,exports){
 'use strict';
 
 var UserConfigurationGateway = require('./gateway/UserConfigurationGateway');
@@ -232,7 +233,7 @@ module.exports = function () {
 
 	return {
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.0.3'
+		version: '1.0.4'
 	};
 }();
 
@@ -243,17 +244,458 @@ var _createClass = function () { function defineProperties(target, props) { for 
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
+var assert = require('./../../lang/assert'),
+    is = require('./../../lang/is');
+
+var FailureReasonItem = require('./FailureReasonItem'),
+    FailureType = require('./FailureType'),
+    Tree = require('./../../collections/Tree');
+
+module.exports = function () {
+	'use strict';
+
+	/**
+  * Describes all of the reasons for API failure. Since there can be multiple reasons, the reasons are
+  * stored in a tree structure.
+  *
+  * @public
+  * @param {Object=} data - Data regarding the API request itself, likely independent of the failure data (which is maintained in the tree structure).
+  */
+
+	var FailureReason = function () {
+		function FailureReason(data) {
+			_classCallCheck(this, FailureReason);
+
+			this._data = data || null;
+
+			this._head = new Tree();
+			this._current = this._head;
+		}
+
+		/**
+   * Adds a {@link FailureReasonItem} to the tree of reason(s) at the current node.
+   *
+   * @public
+   * @param {FailureType} type - The failure type.
+   * @param {Object=} data - The data associated with the failure type.
+   * @param {Boolean=} group - The reason is expected to have children; therefore, the current tree node is shifted to the newly added {@link FailureReasonItem}.
+   * @returns {FailureReason} - The current instance, allowing for method chaining.
+   */
+
+
+		_createClass(FailureReason, [{
+			key: 'addItem',
+			value: function addItem(type, data, group) {
+				assert.argumentIsRequired(type, 'type', FailureType, 'FailureType');
+				assert.argumentIsOptional(group, 'group', Boolean);
+
+				var node = this._current.addChild(new FailureReasonItem(type, data));
+
+				if (is.boolean(group) && group) {
+					this._current = node;
+				}
+
+				return this;
+			}
+
+			/**
+    * Resets the current node to the head of the tree.
+    *
+    * @public
+    * @returns {FailureReason} - The current instance, allowing for method chaining.
+    */
+
+		}, {
+			key: 'reset',
+			value: function reset() {
+				this._current = this._head;
+
+				return this;
+			}
+
+			/**
+    * Returns a tree of strings, describing the reason(s) for API failure.
+    *
+    * @public
+    * @returns {Array}
+    */
+
+		}, {
+			key: 'format',
+			value: function format() {
+				var _this = this;
+
+				var reasons = this._head.toJSObj(function (item) {
+					return {
+						code: item ? item.type.code : null,
+						message: item ? item.format(_this._data) : null
+					};
+				});
+
+				return reasons.children;
+			}
+		}, {
+			key: 'toJSON',
+			value: function toJSON() {
+				return JSON.stringify(this.format());
+			}
+
+			/**
+    * Factory function for creating instances of {@link FailureReason}.
+    *
+    * @public
+    * @static
+    * @param data
+    * @returns {FailureReason}
+    */
+
+		}, {
+			key: 'toString',
+			value: function toString() {
+				return '[FailureReason]';
+			}
+		}], [{
+			key: 'forRequest',
+			value: function forRequest(data) {
+				return new FailureReason(data);
+			}
+
+			/**
+    * Returns an HTTP status code that would be suitable for use with the
+    * failure reason.
+    *
+    * @param {FailureType} reason
+    * @returns {Number}
+    */
+
+		}, {
+			key: 'getHttpStatusCode',
+			value: function getHttpStatusCode(reason) {
+				assert.argumentIsRequired(reason, 'reason', FailureReason, 'FailureReason');
+
+				var returnVal = null;
+
+				reason._head.walk(function (item) {
+					var code = FailureType.getHttpStatusCode(item.type);
+
+					if (returnVal === null || returnVal !== 400) {
+						returnVal = code;
+					}
+				}, false, false);
+
+				return returnVal;
+			}
+		}]);
+
+		return FailureReason;
+	}();
+
+	return FailureReason;
+}();
+
+},{"./../../collections/Tree":21,"./../../lang/assert":25,"./../../lang/is":27,"./FailureReasonItem":5,"./FailureType":6}],5:[function(require,module,exports){
+'use strict';
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var assert = require('./../../lang/assert'),
+    attributes = require('./../../lang/attributes');
+
+var FailureType = require('./FailureType');
+
+module.exports = function () {
+	'use strict';
+
+	/**
+  * One of the reason(s) for API failure, including any specific data that
+  * allows a human-readable message to be generated.
+  *
+  * @public
+  * @param {FailureType} type
+  * @param {Object=} data
+  */
+
+	var FailureReasonItem = function () {
+		function FailureReasonItem(type, data) {
+			_classCallCheck(this, FailureReasonItem);
+
+			assert.argumentIsRequired(type, 'type', FailureType, 'FailureType');
+
+			this._type = type;
+			this._data = data || null;
+		}
+
+		/**
+   * The {@link FailureType} of the item.
+   *
+   * @returns {FailureType}
+   */
+
+
+		_createClass(FailureReasonItem, [{
+			key: 'format',
+
+
+			/**
+    * Formats a human-readable message, describing the failure.
+    *
+    * @public
+    * @param {Object=} root - Root data from the {@link FailureReason}.
+    * @returns {String}
+    */
+			value: function format(root) {
+				var _this = this;
+
+				return this._type.template.replace(tokenRegex, function (full, ignored, casing, token) {
+					var tokenToUse = void 0;
+					var dataToRead = void 0;
+
+					if (token.startsWith(rootPrefix)) {
+						tokenToUse = token.slice(rootLength);
+						dataToRead = root;
+					} else {
+						tokenToUse = token;
+						dataToRead = _this._data;
+					}
+
+					var replacement = attributes.read(dataToRead, tokenToUse);
+
+					if (replacement) {
+						if (casing === 'l') {
+							replacement = '' + replacement.slice(0, 1).toLowerCase() + replacement.slice(1);
+						} else if (casing === 'u') {
+							replacement = '' + replacement.slice(0, 1).toUpperCase() + replacement.slice(1);
+						} else if (casing === 'U') {
+							replacement = '' + replacement.toUpperCase();
+						} else if (casing === 'L') {
+							replacement = '' + replacement.toLowerCase();
+						}
+					}
+
+					return replacement;
+				});
+			}
+		}, {
+			key: 'toString',
+			value: function toString() {
+				return '[FailureReasonItem]';
+			}
+		}, {
+			key: 'type',
+			get: function get() {
+				return this._type;
+			}
+		}]);
+
+		return FailureReasonItem;
+	}();
+
+	var tokenRegex = /{(([U|L|l|u])\|)?([a-zA-Z.]*)}/g;
+
+	var rootPrefix = 'root.';
+	var rootLength = rootPrefix.length;
+
+	return FailureReasonItem;
+}();
+
+},{"./../../lang/assert":25,"./../../lang/attributes":26,"./FailureType":6}],6:[function(require,module,exports){
+'use strict';
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+var assert = require('./../../lang/assert'),
+    Enum = require('./../../lang/Enum');
+
+module.exports = function () {
+	'use strict';
+
+	/**
+  * An enumeration that describes potential reasons for API failure.
+  *
+  * @public
+  * @extends {Enum}
+  * @param {String} code - The enumeration code (and description)
+  * @param {String} template - The template string for formatting human-readable messages.
+  */
+
+	var FailureType = function (_Enum) {
+		_inherits(FailureType, _Enum);
+
+		function FailureType(code, template) {
+			_classCallCheck(this, FailureType);
+
+			var _this = _possibleConstructorReturn(this, (FailureType.__proto__ || Object.getPrototypeOf(FailureType)).call(this, code, code));
+
+			assert.argumentIsRequired(template, 'template', String);
+
+			_this._template = template;
+			return _this;
+		}
+
+		/**
+   * The template string for formatting human-readable messages.
+   *
+   * @public
+   * @returns {String}
+   */
+
+
+		_createClass(FailureType, [{
+			key: 'toString',
+			value: function toString() {
+				return '[FailureType (code=' + this.code + ')]';
+			}
+		}, {
+			key: 'template',
+			get: function get() {
+				return this._template;
+			}
+
+			/**
+    * One or more data points is missing.
+    *
+    * @static
+    * @returns {FailureType}
+    */
+
+		}], [{
+			key: 'getHttpStatusCode',
+
+
+			/**
+    * Returns an HTTP status code that would be suitable for use with the
+    * failure type.
+    *
+    * @param {FailureType} type
+    * @returns {Number}
+    */
+			value: function getHttpStatusCode(type) {
+				assert.argumentIsRequired(type, 'type', FailureType, 'FailureType');
+
+				var returnVal = void 0;
+
+				if (type === FailureType.REQUEST_IDENTITY_FAILURE) {
+					returnVal = 401;
+				} else if (type === FailureType.REQUEST_AUTHORIZATION_FAILURE) {
+					returnVal = 403;
+				} else {
+					returnVal = 400;
+				}
+
+				return returnVal;
+			}
+		}, {
+			key: 'REQUEST_CONSTRUCTION_FAILURE',
+			get: function get() {
+				return requestConstructionFailure;
+			}
+
+			/**
+    * A data point is missing.
+    *
+    * @static
+    * @returns {FailureType}
+    */
+
+		}, {
+			key: 'REQUEST_PARAMETER_MISSING',
+			get: function get() {
+				return requestParameterMissing;
+			}
+
+			/**
+    * User identity could not be determined.
+    *
+    * @static
+    * @returns {FailureType}
+    */
+
+		}, {
+			key: 'REQUEST_IDENTITY_FAILURE',
+			get: function get() {
+				return requestIdentifyFailure;
+			}
+
+			/**
+    * User authorization failed.
+    *
+    * @static
+    * @returns {FailureType}
+    */
+
+		}, {
+			key: 'REQUEST_AUTHORIZATION_FAILURE',
+			get: function get() {
+				return requestAuthorizationFailure;
+			}
+
+			/**
+    * The request data cannot be parsed or interpreted.
+    *
+    * @static
+    * @returns {FailureType}
+    */
+
+		}, {
+			key: 'REQUEST_INPUT_MALFORMED',
+			get: function get() {
+				return requestInputMalformed;
+			}
+
+			/**
+    * The request failed for unspecified reasons.
+    *
+    * @static
+    * @returns {FailureType}
+    */
+
+		}, {
+			key: 'REQUEST_GENERAL_FAILURE',
+			get: function get() {
+				return requestGeneralFailure;
+			}
+		}]);
+
+		return FailureType;
+	}(Enum);
+
+	var requestConstructionFailure = new FailureType('REQUEST_CONSTRUCTION_FAILURE', 'An attempt to {L|root.endpoint.description} failed because some required information is missing.');
+	var requestParameterMissing = new FailureType('REQUEST_PARAMETER_MISSING', 'The "{L|name}" field is required.');
+	var requestIdentifyFailure = new FailureType('REQUEST_IDENTITY_FAILURE', 'An attempt to {L|root.endpoint.description} failed because your identity could not be determined.');
+	var requestAuthorizationFailure = new FailureType('REQUEST_AUTHORIZATION_FAILURE', 'An attempt to {L|root.endpoint.description} failed due to authentication failure.');
+	var requestInputMalformed = new FailureType('REQUEST_INPUT_MALFORMED', 'An attempt to {L|root.endpoint.description} failed, the data structure is invalid.');
+	var requestGeneralFailure = new FailureType('REQUEST_GENERAL_FAILURE', 'An attempt to {L|root.endpoint.description} failed for unspecified reason(s).');
+
+	return FailureType;
+}();
+
+},{"./../../lang/Enum":23,"./../../lang/assert":25}],7:[function(require,module,exports){
+'use strict';
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
 var axios = require('axios');
 
-var assert = require('@barchart/common-js/lang/assert'),
-    attributes = require('@barchart/common-js/lang/attributes'),
-    is = require('@barchart/common-js/lang/is'),
-    promise = require('@barchart/common-js/lang/promise');
+var array = require('./../../lang/array'),
+    assert = require('./../../lang/assert'),
+    attributes = require('./../../lang/attributes'),
+    promise = require('./../../lang/promise');
 
-var BodyType = require('./definitions/BodyType'),
-    Endpoint = require('./definitions/Endpoint'),
-    Parameter = require('./definitions/Parameter'),
+var Endpoint = require('./definitions/Endpoint'),
     VerbType = require('./definitions/VerbType');
+
+var FailureReason = require('./../failures/FailureReason'),
+    FailureType = require('./../failures/FailureType');
 
 module.exports = function () {
 	'use strict';
@@ -288,11 +730,52 @@ module.exports = function () {
 		}], [{
 			key: 'invoke',
 			value: function invoke(endpoint, payload) {
-				return Promise.resolve({}).then(function () {
+				return Promise.resolve().then(function () {
 					assert.argumentIsRequired(endpoint, 'endpoint', Endpoint, 'Endpoint');
 
-					return Promise.resolve({}).then(function (options) {
-						return Promise.resolve([]).then(function (url) {
+					var pathParameters = endpoint.path.parameters;
+					var headerParameters = endpoint.headers.parameters;
+					var queryParameters = endpoint.query.parameters;
+					var bodyParameters = endpoint.body.parameters;
+
+					var extractParameter = function extractParameter(parameter) {
+						return parameter.extractor(payload).catch(function (e) {
+							return null;
+						});
+					};
+
+					return Promise.all([promise.map(pathParameters, extractParameter), promise.map(headerParameters, extractParameter), promise.map(queryParameters, extractParameter), promise.map(bodyParameters, extractParameter)]).then(function (groups) {
+						var pathValues = groups[0];
+						var headerValues = groups[1];
+						var queryValues = groups[2];
+						var bodyValues = groups[3];
+
+						var parameters = array.flatten([pathParameters, headerParameters, queryParameters, bodyParameters]);
+						var values = array.flatten([pathValues, headerValues, queryValues, bodyValues]);
+
+						var failure = values.reduce(function (accumulator, value, i) {
+							var failure = accumulator;
+
+							var parameter = parameters[i];
+
+							if (value === null && !parameter.optional) {
+								if (accumulator === null) {
+									failure = FailureReason.forRequest({ endpoint: endpoint }).addItem(FailureType.REQUEST_CONSTRUCTION_FAILURE, null, true);
+								}
+
+								failure.addItem(FailureType.REQUEST_PARAMETER_MISSING, { name: parameter.description });
+							}
+
+							return failure;
+						}, null);
+
+						if (failure !== null) {
+							throw failure.format();
+						}
+
+						return Promise.resolve({}).then(function (options) {
+							var url = [];
+
 							url.push(endpoint.protocol.prefix);
 							url.push(endpoint.host);
 
@@ -303,113 +786,103 @@ module.exports = function () {
 
 							url.push('/');
 
-							return promise.pipeline(endpoint.path.parameters.map(function (parameter) {
+							return promise.pipeline(pathValues.map(function (value) {
 								return function (previous) {
-									return parameter.extractor(payload).then(function (value) {
-										previous.push(value);
+									previous.push(value);
 
-										return previous;
-									});
+									return previous;
 								};
 							}), []).then(function (paths) {
 								url.push(paths.join('/'));
 
 								return url.join('');
+							}).then(function (url) {
+								options.method = verbs.get(endpoint.verb);
+								options.url = url;
+
+								return options;
 							});
-						}).then(function (url) {
-							options.method = verbs.get(endpoint.verb);
-							options.url = url;
-
-							return options;
-						});
-					}).then(function (options) {
-						var headerParameters = endpoint.headers.parameters;
-
-						if (headerParameters.length === 0) {
-							return Promise.resolve(options);
-						}
-
-						return Promise.resolve({}).then(function (headers) {
-							return promise.pipeline(headerParameters.map(function (parameter) {
-								return function (previous) {
-									return parameter.extractor(payload).then(function (value) {
-										if (value !== null) {
-											previous[parameter.key] = value;
-										} else if (!parameter.optional) {
-											throw new Error('Unable to extract header parameter [ ' + parameter.key + ' ]');
-										}
-
-										return previous;
-									});
-								};
-							}), headers);
-						}).then(function (headers) {
-							options.headers = headers;
-
-							return options;
-						});
-					}).then(function (options) {
-						var queryParameters = endpoint.query.parameters;
-
-						if (queryParameters.length === 0) {
-							return Promise.resolve(options);
-						}
-
-						return Promise.resolve({}).then(function (query) {
-							return promise.pipeline(queryParameters.map(function (parameter) {
-								return function (previous) {
-									return parameter.extractor(payload).then(function (value) {
-										if (value !== null) {
-											previous[parameter.key] = value;
-										} else if (!parameter.optional) {
-											throw new Error('Unable to extract query parameter [ ' + parameter.key + ' ]');
-										}
-
-										return previous;
-									});
-								};
-							}), query);
-						}).then(function (query) {
-							options.params = query;
-
-							return options;
-						});
-					}).then(function (options) {
-						var body = endpoint.body;
-
-						if (body.type === BodyType.ENTIRE) {
-							options.data = payload;
-						} else if (body.type === BodyType.VARIABLE) {
-							if (attributes.has(payload, body.name)) {
-								options.data = attributes.read(payload, body.name);
-							} else {
-								throw new Error('Unable construct web service request, payload is missing variable [ ' + body + ' ].');
+						}).then(function (options) {
+							if (headerParameters.length === 0) {
+								return options;
 							}
-						}
 
-						return options;
-					}).then(function (options) {
-						if (endpoint.requestInterceptor) {
-							return endpoint.requestInterceptor.process(options);
-						} else {
-							return Promise.resolve(options);
-						}
-					}).then(function (options) {
-						return promise.build(function (resolve, reject) {
-							axios.request(options).then(function (response) {
+							return promise.pipeline(headerValues.map(function (value, i) {
+								return function (accumulator) {
+									var parameter = headerParameters[i];
+
+									accumulator[parameter.key] = value;
+
+									return accumulator;
+								};
+							}), {}).then(function (headers) {
+								if (headers.length !== 0) {
+									options.headers = headers;
+								}
+
+								return options;
+							});
+						}).then(function (options) {
+							if (queryParameters.length === 0) {
+								return options;
+							}
+
+							return promise.pipeline(queryValues.map(function (value, i) {
+								return function (accumulator) {
+									var parameter = queryParameters[i];
+
+									accumulator[parameter.key] = value;
+
+									return accumulator;
+								};
+							}), {}).then(function (query) {
+								if (query.length !== 0) {
+									options.params = query;
+								}
+
+								return options;
+							});
+						}).then(function (options) {
+							if (bodyParameters.length === 0) {
+								return options;
+							}
+
+							return promise.pipeline(bodyValues.map(function (value, i) {
+								return function (accumulator) {
+									var parameter = bodyParameters[i];
+
+									attributes.write(accumulator, parameter.key, value);
+
+									return accumulator;
+								};
+							}), {}).then(function (body) {
+								options.data = body.body;
+
+								return options;
+							});
+						}).then(function (options) {
+							if (endpoint.requestInterceptor) {
+								return endpoint.requestInterceptor.process(options, endpoint);
+							} else {
+								return options;
+							}
+						}).then(function (options) {
+							return axios.request(options).then(function (response) {
 								var responsePromise = void 0;
 
 								if (endpoint.responseInterceptor) {
-									responsePromise = endpoint.responseInterceptor.process(response);
+									responsePromise = endpoint.responseInterceptor.process(response, endpoint);
 								} else {
-									responsePromise = resolve(response);
+									responsePromise = Promise.resolve(response);
 								}
 
-								return responsePromise.then(function (response) {
-									return resolve(response);
-								});
+								return Promise.resolve(responsePromise);
 							}).catch(function (e) {
-								reject(e);
+								if (endpoint.errorInterceptor) {
+									return endpoint.errorInterceptor.process(e, endpoint);
+								} else {
+									throw e;
+								}
 							});
 						});
 					});
@@ -430,26 +903,26 @@ module.exports = function () {
 	return Gateway;
 }();
 
-},{"./definitions/BodyType":8,"./definitions/Endpoint":9,"./definitions/Parameter":10,"./definitions/VerbType":13,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/attributes":22,"@barchart/common-js/lang/is":23,"@barchart/common-js/lang/promise":25,"axios":28}],5:[function(require,module,exports){
+},{"./../../lang/array":24,"./../../lang/assert":25,"./../../lang/attributes":26,"./../../lang/promise":29,"./../failures/FailureReason":4,"./../failures/FailureType":6,"./definitions/Endpoint":10,"./definitions/VerbType":14,"axios":32}],8:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var assert = require('@barchart/common-js/lang/assert');
+var assert = require('./../../../lang/assert');
 
 var ParametersBuilder = require('./ParametersBuilder');
 
-var Body = require('./../definitions/Body'),
-    BodyType = require('./../definitions/BodyType'),
-    Endpoint = require('./../definitions/Endpoint'),
+var Endpoint = require('./../definitions/Endpoint'),
     Parameters = require('./../definitions/Parameters'),
     ProtocolType = require('./../definitions/ProtocolType'),
     VerbType = require('./../definitions/VerbType');
 
-var CompositeResponseInterceptor = require('./../interceptors/CompositeResponseInterceptor'),
+var CompositeErrorInterceptor = require('./../interceptors/CompositeErrorInterceptor'),
+    CompositeResponseInterceptor = require('./../interceptors/CompositeResponseInterceptor'),
     CompositeRequestInterceptor = require('./../interceptors/CompositeRequestInterceptor'),
+    ErrorInterceptor = require('./../interceptors/ErrorInterceptor'),
     ResponseInterceptor = require('./../interceptors/ResponseInterceptor'),
     RequestInterceptor = require('./../interceptors/RequestInterceptor');
 
@@ -464,12 +937,13 @@ module.exports = function () {
   */
 
 	var EndpointBuilder = function () {
-		function EndpointBuilder(name) {
+		function EndpointBuilder(name, description) {
 			_classCallCheck(this, EndpointBuilder);
 
 			assert.argumentIsRequired(name, 'name', String);
+			assert.argumentIsOptional(description, 'description', String);
 
-			this._endpoint = new Endpoint(name);
+			this._endpoint = new Endpoint(name, description);
 		}
 
 		/**
@@ -494,7 +968,7 @@ module.exports = function () {
 			value: function withVerb(verb) {
 				assert.argumentIsRequired(verb, 'verb', VerbType, 'VerbType');
 
-				this._endpoint = new Endpoint(this.endpoint.name, verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
@@ -512,7 +986,7 @@ module.exports = function () {
 			value: function withProtocol(protocol) {
 				assert.argumentIsRequired(protocol, 'protocol', ProtocolType, 'ProtocolType');
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
@@ -530,7 +1004,7 @@ module.exports = function () {
 			value: function withHost(host) {
 				assert.argumentIsRequired(host, 'host', String);
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
@@ -548,7 +1022,7 @@ module.exports = function () {
 			value: function withPort(port) {
 				assert.argumentIsRequired(port, 'port', Number);
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
@@ -572,7 +1046,7 @@ module.exports = function () {
 
 				var headers = builder.parameters;
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
@@ -590,13 +1064,13 @@ module.exports = function () {
 			value: function withPathBuilder(callback) {
 				assert.argumentIsRequired(callback, 'callback', Function);
 
-				var builder = new ParametersBuilder();
+				var builder = new ParametersBuilder(true);
 
 				callback(builder);
 
 				var path = builder.parameters;
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
@@ -620,47 +1094,53 @@ module.exports = function () {
 
 				var query = builder.parameters;
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
 
 			/**
-    * Adds a body to the request, selecting the value from a variable
-    * on the request payload.
+    * Adds a {@link Parameters} collection, describing the request body, using a callback.
     *
     * @public
-    * @param {String} variable - The name of the variable whose value contains the body.
+    * @param {EndpointBuilder~parametersBuilderCallback} callback
     * @returns {EndpointBuilder}
     */
 
 		}, {
-			key: 'withVariableBody',
-			value: function withVariableBody(variable) {
-				assert.argumentIsRequired(variable, 'variable', String);
+			key: 'withBodyBuilder',
+			value: function withBodyBuilder(callback) {
+				assert.argumentIsRequired(callback, 'callback', Function);
 
-				var body = new Body(variable, BodyType.VARIABLE);
+				var builder = new ParametersBuilder();
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
+				callback(builder);
+
+				var body = builder.parameters;
+
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
 
 			/**
-    * Adds a body to the request using the entire payload.
+    * Adds a body to the request.
     *
     * @public
+    * @param {String=} description - The human-readable description of the request body.
     * @returns {EndpointBuilder}
     */
 
 		}, {
-			key: 'withEntireBody',
-			value: function withEntireBody() {
-				var body = new Body(name, BodyType.ENTIRE);
+			key: 'withBody',
+			value: function withBody(description) {
+				assert.argumentIsOptional(description, 'description', String);
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor);
-
-				return this;
+				return this.withBodyBuilder(function (bodyBuilder) {
+					bodyBuilder.withDelegateParameter(description || 'request payload', 'body', function (x) {
+						return x;
+					});
+				});
 			}
 
 			/**
@@ -679,19 +1159,19 @@ module.exports = function () {
 				var existingRequestInterceptor = this.endpoint.requestInterceptor;
 				var updatedRequestInterceptor = void 0;
 
-				if (existingRequestInterceptor) {
+				if (existingRequestInterceptor && existingRequestInterceptor !== RequestInterceptor.EMPTY) {
 					updatedRequestInterceptor = new CompositeRequestInterceptor(existingRequestInterceptor, requestInterceptor);
 				} else {
 					updatedRequestInterceptor = requestInterceptor;
 				}
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, updatedRequestInterceptor, this.endpoint.responseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, updatedRequestInterceptor, this.endpoint.responseInterceptor, this.endpoint.errorInterceptor);
 
 				return this;
 			}
 
 			/**
-    * Adds a {@link ResponseInterceptor}.
+    * Adds a {@link ResponseInterceptor} for successful web service responses.
     *
     * @public
     * @param {ResponseInterceptor} responseInterceptor
@@ -706,13 +1186,40 @@ module.exports = function () {
 				var existingResponseInterceptor = this.endpoint.responseInterceptor;
 				var updatedResponseInterceptor = void 0;
 
-				if (existingResponseInterceptor) {
+				if (existingResponseInterceptor && existingResponseInterceptor !== ResponseInterceptor.EMPTY) {
 					updatedResponseInterceptor = new CompositeResponseInterceptor(existingResponseInterceptor, responseInterceptor);
 				} else {
 					updatedResponseInterceptor = responseInterceptor;
 				}
 
-				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, updatedResponseInterceptor);
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, updatedResponseInterceptor, this.endpoint.errorInterceptor);
+
+				return this;
+			}
+
+			/**
+    * Adds a {@link ErrorInterceptor} for handling remote web service errors.
+    *
+    * @public
+    * @param {ErrorInterceptor} responseInterceptor
+    * @returns {EndpointBuilder}
+    */
+
+		}, {
+			key: 'withErrorInterceptor',
+			value: function withErrorInterceptor(errorInterceptor) {
+				assert.argumentIsRequired(errorInterceptor, 'errorInterceptor', ErrorInterceptor, 'ErrorInterceptor');
+
+				var existingErrorInterceptor = this.endpoint.errorInterceptor;
+				var updatedErrorInterceptor = void 0;
+
+				if (existingErrorInterceptor && existingErrorInterceptor !== ErrorInterceptor.EMPTY) {
+					updatedErrorInterceptor = new CompositeErrorInterceptor(existingErrorInterceptor, errorInterceptor);
+				} else {
+					updatedErrorInterceptor = errorInterceptor;
+				}
+
+				this._endpoint = new Endpoint(this.endpoint.name, this.endpoint.description, this.endpoint.verb, this.endpoint.protocol, this.endpoint.host, this.endpoint.port, this.endpoint.path, this.endpoint.query, this.endpoint.headers, this.endpoint.body, this.endpoint.requestInterceptor, this.endpoint.responseInterceptor, updatedErrorInterceptor);
 
 				return this;
 			}
@@ -723,6 +1230,7 @@ module.exports = function () {
     * @static
     * @public
     * @param {String} name
+    * @param {String=} description
     * @returns {EndpointBuilder}
     */
 
@@ -738,8 +1246,8 @@ module.exports = function () {
 			}
 		}], [{
 			key: 'for',
-			value: function _for(name) {
-				return new EndpointBuilder(name);
+			value: function _for(name, description) {
+				return new EndpointBuilder(name, description);
 			}
 		}]);
 
@@ -756,16 +1264,16 @@ module.exports = function () {
 	return EndpointBuilder;
 }();
 
-},{"./../definitions/Body":7,"./../definitions/BodyType":8,"./../definitions/Endpoint":9,"./../definitions/Parameters":11,"./../definitions/ProtocolType":12,"./../definitions/VerbType":13,"./../interceptors/CompositeRequestInterceptor":14,"./../interceptors/CompositeResponseInterceptor":15,"./../interceptors/RequestInterceptor":16,"./../interceptors/ResponseInterceptor":17,"./ParametersBuilder":6,"@barchart/common-js/lang/assert":21}],6:[function(require,module,exports){
+},{"./../../../lang/assert":25,"./../definitions/Endpoint":10,"./../definitions/Parameters":12,"./../definitions/ProtocolType":13,"./../definitions/VerbType":14,"./../interceptors/CompositeErrorInterceptor":15,"./../interceptors/CompositeRequestInterceptor":16,"./../interceptors/CompositeResponseInterceptor":17,"./../interceptors/ErrorInterceptor":18,"./../interceptors/RequestInterceptor":19,"./../interceptors/ResponseInterceptor":20,"./ParametersBuilder":9}],9:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    attributes = require('@barchart/common-js/lang/attributes'),
-    is = require('@barchart/common-js/lang/is');
+var assert = require('./../../../lang/assert'),
+    attributes = require('./../../../lang/attributes'),
+    is = require('./../../../lang/is');
 
 var Parameter = require('./../definitions/Parameter'),
     Parameters = require('./../definitions/Parameters');
@@ -777,13 +1285,16 @@ module.exports = function () {
   * Fluent interface for building a {@link Parameters} collection.
   *
   * @public
+  * @param {Boolean} required - If true, all parameters will be marked as required.
   */
 
 	var ParametersBuilder = function () {
-		function ParametersBuilder() {
+		function ParametersBuilder(required) {
 			_classCallCheck(this, ParametersBuilder);
 
 			this._parameters = new Parameters();
+
+			this._required = is.boolean(required) && required;
 		}
 
 		/**
@@ -801,13 +1312,15 @@ module.exports = function () {
 			/**
     * Adds a new parameter that extracts its value from a delegate.
     *
+    * @param {String} description
     * @param {String} key
     * @param {Function} delegate
     * @param (Boolean=} optional
+    * @param {Function=} serializer
     * @returns {ParametersBuilder}
     */
-			value: function withDelegateParameter(key, delegate, optional) {
-				addParameter.call(this, new Parameter(key, buildDelegateExtractor(delegate), optional));
+			value: function withDelegateParameter(description, key, delegate, optional, serializer) {
+				addParameter.call(this, new Parameter(description, key, buildDelegateExtractor(delegate, buildSerializer(serializer)), optional || this._required));
 
 				return this;
 			}
@@ -815,16 +1328,17 @@ module.exports = function () {
 			/**
     * Adds a new parameter with a literal value.
     *
+    * @param {String} description
     * @param {String} key
-    * @param {Function} delegate
+    * @param {*=} value
     * @param (Boolean=} optional
     * @returns {ParametersBuilder}
     */
 
 		}, {
 			key: 'withLiteralParameter',
-			value: function withLiteralParameter(key, value, optional) {
-				addParameter.call(this, new Parameter(key, buildLiteralExtractor(value || key), optional));
+			value: function withLiteralParameter(description, key, value, optional) {
+				addParameter.call(this, new Parameter(description, key, buildLiteralExtractor(value || key), optional || this._required));
 
 				return this;
 			}
@@ -833,16 +1347,18 @@ module.exports = function () {
     * Adds a new parameter that reads its value from the a variable
     * on the request payload.
     *
+    * @param {String} description
     * @param {String} key
-    * @param {Function} delegate
+    * @param {String} variable
     * @param (Boolean=} optional
+    * @param {Function=} serializer
     * @returns {ParametersBuilder}
     */
 
 		}, {
 			key: 'withVariableParameter',
-			value: function withVariableParameter(key, variable, optional) {
-				addParameter.call(this, new Parameter(key, buildVariableExtractor(variable), optional));
+			value: function withVariableParameter(description, key, variable, optional, serializer) {
+				addParameter.call(this, new Parameter(description, key, buildVariableExtractor(variable, buildSerializer(serializer)), optional || this._required));
 
 				return this;
 			}
@@ -869,12 +1385,26 @@ module.exports = function () {
 		this._parameters = new Parameters(items);
 	}
 
-	function buildDelegateExtractor(fn) {
+	function buildSerializer(serializer) {
+		var returnRef = void 0;
+
+		if (is.fn(serializer)) {
+			returnRef = serializer;
+		} else {
+			returnRef = function returnRef(x) {
+				return x;
+			};
+		}
+
+		return returnRef;
+	}
+
+	function buildDelegateExtractor(fn, serializer) {
 		assert.argumentIsRequired(fn, 'fn', Function);
 
 		return function (payload) {
 			return Promise.resolve().then(function () {
-				return fn(payload);
+				return serializer(fn(payload));
 			});
 		};
 	}
@@ -887,7 +1417,7 @@ module.exports = function () {
 		};
 	}
 
-	function buildVariableExtractor(variable) {
+	function buildVariableExtractor(variable, serializer) {
 		assert.argumentIsRequired(variable, 'variable', String);
 
 		return buildDelegateExtractor(function (payload) {
@@ -896,210 +1426,28 @@ module.exports = function () {
 			} else {
 				return null;
 			}
-		});
+		}, serializer);
 	}
 
 	return ParametersBuilder;
 }();
 
-},{"./../definitions/Parameter":10,"./../definitions/Parameters":11,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/attributes":22,"@barchart/common-js/lang/is":23}],7:[function(require,module,exports){
+},{"./../../../lang/assert":25,"./../../../lang/attributes":26,"./../../../lang/is":27,"./../definitions/Parameter":11,"./../definitions/Parameters":12}],10:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    is = require('@barchart/common-js/lang/is');
+var is = require('./../../../lang/is');
 
-var BodyType = require('./BodyType');
-
-module.exports = function () {
-	'use strict';
-
-	/**
-  * The definition the body for an {@link Endpoint}.
-  *
-  * @public
-  * @param {String=} name
-  * @param {BodyType=} type
-  */
-
-	var Body = function () {
-		function Body(name, type) {
-			_classCallCheck(this, Body);
-
-			this._name = name || null;
-			this._type = type || BodyType.NONE;
-		}
-
-		/**
-   * If necessary, the name of the variable (read from the payload) to
-   * use on the request body.
-   *
-   * @public
-   * @returns {String|null}
-   */
-
-
-		_createClass(Body, [{
-			key: 'validate',
-
-
-			/**
-    * Throws an {@link Error} if the instance is invalid.
-    *
-    * @public
-    */
-			value: function validate() {
-				if (this._name && !is.string(this._name)) {
-					throw new Error('If present, the body name must be a non-zero-length string.');
-				}
-
-				if (!(this._type instanceof BodyType)) {
-					throw new Error('Parameter type must be an instance of BodyType.');
-				}
-			}
-		}, {
-			key: 'toString',
-			value: function toString() {
-				return '[Body]';
-			}
-		}, {
-			key: 'name',
-			get: function get() {
-				return this._name;
-			}
-
-			/**
-    * The type of the parameter.
-    *
-    * @public
-    * @returns {BodyType}
-    */
-
-		}, {
-			key: 'type',
-			get: function get() {
-				return this._type;
-			}
-		}]);
-
-		return Body;
-	}();
-
-	return Body;
-}();
-
-},{"./BodyType":8,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],8:[function(require,module,exports){
-'use strict';
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-var Enum = require('@barchart/common-js/lang/Enum');
-
-module.exports = function () {
-	'use strict';
-
-	/**
-  * Defines the mechanism used to select the body of the
-  * request from the request payload.
-  *
-  * @public
-  * @extends {Enum}
-  * @param {String} code
-  * @param {String} description
-  */
-
-	var BodyType = function (_Enum) {
-		_inherits(BodyType, _Enum);
-
-		function BodyType(code, description) {
-			_classCallCheck(this, BodyType);
-
-			return _possibleConstructorReturn(this, (BodyType.__proto__ || Object.getPrototypeOf(BodyType)).call(this, code, description));
-		}
-
-		/**
-   * Uses no body for the request.
-   *
-   * @static
-   * @returns {BodyType}
-   */
-
-
-		_createClass(BodyType, [{
-			key: 'toString',
-			value: function toString() {
-				return '[BodyType (description=' + this.description + ')]';
-			}
-		}], [{
-			key: 'NONE',
-			get: function get() {
-				return bodyTypeNone;
-			}
-
-			/**
-    * Uses the entire payload as the request body.
-    *
-    * @static
-    * @returns {BodyType}
-    */
-
-		}, {
-			key: 'ENTIRE',
-			get: function get() {
-				return bodyTypeEntire;
-			}
-
-			/**
-    * Uses a single property, selected using a variable name, from the payload
-    * as the request body.
-    *
-    * @static
-    * @returns {BodyType}
-    */
-
-		}, {
-			key: 'VARIABLE',
-			get: function get() {
-				return bodyTypeVariable;
-			}
-		}]);
-
-		return BodyType;
-	}(Enum);
-
-	var bodyTypeNone = new BodyType('NONE', 'none');
-	var bodyTypeEntire = new BodyType('ENTIRE', 'entire');
-	var bodyTypeVariable = new BodyType('VARIABLE', 'variable');
-
-	return BodyType;
-}();
-
-},{"@barchart/common-js/lang/Enum":19}],9:[function(require,module,exports){
-'use strict';
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-var assert = require('@barchart/common-js/lang/assert'),
-    is = require('@barchart/common-js/lang/is');
-
-var Body = require('./Body'),
-    Parameter = require('./Parameter'),
+var Parameter = require('./Parameter'),
     Parameters = require('./Parameters'),
     ProtocolType = require('./ProtocolType'),
     VerbType = require('./VerbType');
 
-var RequestInterceptor = require('./../interceptors/RequestInterceptor'),
+var ErrorInterceptor = require('./../interceptors/ErrorInterceptor'),
+    RequestInterceptor = require('./../interceptors/RequestInterceptor'),
     ResponseInterceptor = require('./../interceptors/ResponseInterceptor');
 
 module.exports = function () {
@@ -1110,6 +1458,7 @@ module.exports = function () {
   *
   * @public
   * @param {String=} name
+  * @param {String=} description
   * @param {VerbType=} verb
   * @param {ProtocolType=} protocol
   * @param {String=} host
@@ -1117,16 +1466,18 @@ module.exports = function () {
   * @param {Parameters=} path
   * @param {Parameters=} query
   * @param {Parameters=} headers
-  * @param {Body=} body
+  * @param {Parameters=} body
   * @param {RequestInterceptor} requestInterceptor
   * @param {ResponseInterceptor} responseInterceptor
+  * @param {ErrorInterceptor} errorInterceptor
   */
 
 	var Endpoint = function () {
-		function Endpoint(name, verb, protocol, host, port, path, query, headers, body, requestInterceptor, responseInterceptor) {
+		function Endpoint(name, description, verb, protocol, host, port, path, query, headers, body, requestInterceptor, responseInterceptor, errorInterceptor) {
 			_classCallCheck(this, Endpoint);
 
 			this._name = name || null;
+			this._description = description || null;
 			this._verb = verb || VerbType.GET;
 			this._protocol = protocol || ProtocolType.HTTPS;
 			this._host = host || null;
@@ -1134,13 +1485,14 @@ module.exports = function () {
 			this._path = path || new Parameters();
 			this._query = query || new Parameters();
 			this._headers = headers || new Parameters();
-			this._body = body || new Body();
+			this._body = body || new Parameters();
 			this._requestInterceptor = requestInterceptor || RequestInterceptor.EMPTY;
 			this._responseInterceptor = responseInterceptor || ResponseInterceptor.EMPTY;
+			this._errorInterceptor = errorInterceptor || ErrorInterceptor.EMPTY;
 		}
 
 		/**
-   * The name of the endpoint (used for descriptive purposes only).
+   * The name of the endpoint (used for internal purposes only).
    *
    * @public
    * @returns {String}
@@ -1187,8 +1539,8 @@ module.exports = function () {
 
 				this.headers.validate();
 
-				if (!(this.body instanceof Body)) {
-					throw new Error('The body must be a Body instance.');
+				if (!(this.body instanceof Parameters)) {
+					throw new Error('The body must be a Parameters collection.');
 				}
 
 				this.body.validate();
@@ -1200,6 +1552,10 @@ module.exports = function () {
 				if (this.responseInterceptor && !(this.responseInterceptor instanceof ResponseInterceptor)) {
 					throw new Error('Endpoint response interceptor must be an instance of ResponseInterceptor.');
 				}
+
+				if (this.errorInterceptor && !(this.errorInterceptor instanceof ErrorInterceptor)) {
+					throw new Error('Endpoint error interceptor must be an instance of ErrorInterceptor.');
+				}
 			}
 		}, {
 			key: 'toString',
@@ -1210,6 +1566,19 @@ module.exports = function () {
 			key: 'name',
 			get: function get() {
 				return this._name;
+			}
+
+			/**
+    * A description of the action performed by the endpoint, suitable for display to users.
+    *
+    * @public
+    * @returns {String}
+    */
+
+		}, {
+			key: 'description',
+			get: function get() {
+				return this._description;
 			}
 
 			/**
@@ -1307,7 +1676,7 @@ module.exports = function () {
     * The body definition of the endpoint.
     *
     * @public
-    * @returns {Body}
+    * @returns {Parameters}
     */
 
 		}, {
@@ -1330,7 +1699,7 @@ module.exports = function () {
 			}
 
 			/**
-    * The request interceptor of the endpoint.
+    * The response interceptor of the endpoint.
     *
     * @public
     * @returns {ResponseInterceptor|null}
@@ -1341,6 +1710,19 @@ module.exports = function () {
 			get: function get() {
 				return this._responseInterceptor;
 			}
+
+			/**
+    * The error interceptor of the endpoint.
+    *
+    * @public
+    * @returns {ErrorInterceptor|null}
+    */
+
+		}, {
+			key: 'errorInterceptor',
+			get: function get() {
+				return this._errorInterceptor;
+			}
 		}]);
 
 		return Endpoint;
@@ -1349,41 +1731,42 @@ module.exports = function () {
 	return Endpoint;
 }();
 
-},{"./../interceptors/RequestInterceptor":16,"./../interceptors/ResponseInterceptor":17,"./Body":7,"./Parameter":10,"./Parameters":11,"./ProtocolType":12,"./VerbType":13,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],10:[function(require,module,exports){
+},{"./../../../lang/is":27,"./../interceptors/ErrorInterceptor":18,"./../interceptors/RequestInterceptor":19,"./../interceptors/ResponseInterceptor":20,"./Parameter":11,"./Parameters":12,"./ProtocolType":13,"./VerbType":14}],11:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    is = require('@barchart/common-js/lang/is');
+var is = require('./../../../lang/is');
 
 module.exports = function () {
 	'use strict';
 
 	/**
   * Encapsulates definition of a parameter -- that is, its name and
-  * its value. Parameters are used in request paths, querystrings, and
-  * as headers.
+  * its value. Parameters are used in request paths, request bodies,
+  * querystrings, and as request headers.
   *
   * @public
+  * @param {String=} description
   * @param {String=} key
   * @param {Parameter~parameterValueCallback} value
   * @param {Boolean=} optional
   */
 
 	var Parameter = function () {
-		function Parameter(key, extractor, optional) {
+		function Parameter(description, key, extractor, optional) {
 			_classCallCheck(this, Parameter);
 
+			this._description = description || null;
 			this._key = key || null;
 			this._extractor = extractor || null;
 			this._optional = is.boolean(optional) && optional;
 		}
 
 		/**
-   * The name of the parameter.
+   * The human-readable description of the parameter.
    *
    * @public
    * @returns {String}
@@ -1404,7 +1787,7 @@ module.exports = function () {
 					throw new Error('Parameter key must be a non-zero length string');
 				}
 
-				if (!is.fn(this.value)) {
+				if (!is.fn(this._extractor)) {
 					throw new Error('Parameter extractor must be a function.');
 				}
 			}
@@ -1413,6 +1796,19 @@ module.exports = function () {
 			value: function toString() {
 				return '[Parameter]';
 			}
+		}, {
+			key: 'description',
+			get: function get() {
+				return this._description;
+			}
+
+			/**
+    * The name of the parameter.
+    *
+    * @public
+    * @returns {String}
+    */
+
 		}, {
 			key: 'key',
 			get: function get() {
@@ -1460,15 +1856,15 @@ module.exports = function () {
 	return Parameter;
 }();
 
-},{"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],11:[function(require,module,exports){
+},{"./../../../lang/is":27}],12:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    is = require('@barchart/common-js/lang/is');
+var assert = require('./../../../lang/assert'),
+    is = require('./../../../lang/is');
 
 var Parameter = require('./Parameter');
 
@@ -1539,7 +1935,7 @@ module.exports = function () {
 	return Parameters;
 }();
 
-},{"./Parameter":10,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],12:[function(require,module,exports){
+},{"./../../../lang/assert":25,"./../../../lang/is":27,"./Parameter":11}],13:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -1550,9 +1946,9 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    Enum = require('@barchart/common-js/lang/Enum'),
-    is = require('@barchart/common-js/lang/is');
+var assert = require('./../../../lang/assert'),
+    Enum = require('./../../../lang/Enum'),
+    is = require('./../../../lang/is');
 
 module.exports = function () {
 	'use strict';
@@ -1653,7 +2049,7 @@ module.exports = function () {
 	return ProtocolType;
 }();
 
-},{"@barchart/common-js/lang/Enum":19,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],13:[function(require,module,exports){
+},{"./../../../lang/Enum":23,"./../../../lang/assert":25,"./../../../lang/is":27}],14:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -1664,7 +2060,7 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var Enum = require('@barchart/common-js/lang/Enum');
+var Enum = require('./../../../lang/Enum');
 
 module.exports = function () {
 	'use strict';
@@ -1756,7 +2152,7 @@ module.exports = function () {
 	return VerbType;
 }();
 
-},{"@barchart/common-js/lang/Enum":19}],14:[function(require,module,exports){
+},{"./../../../lang/Enum":23}],15:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -1767,8 +2163,72 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    is = require('@barchart/common-js/lang/is');
+var assert = require('./../../../lang/assert');
+
+var ErrorInterceptor = require('./ErrorInterceptor');
+
+module.exports = function () {
+	'use strict';
+
+	/**
+  * A {@link ErrorInterceptor} that delegates work to two other instances.
+  *
+  * @public
+  * @extends {ErrorInterceptor}
+  * @param {ErrorInterceptor} a - The first interceptor to process.
+  * @param {ErrorInterceptor} b - The second interceptor to process.
+  */
+
+	var CompositeErrorInterceptor = function (_ErrorInterceptor) {
+		_inherits(CompositeErrorInterceptor, _ErrorInterceptor);
+
+		function CompositeErrorInterceptor(a, b) {
+			_classCallCheck(this, CompositeErrorInterceptor);
+
+			var _this = _possibleConstructorReturn(this, (CompositeErrorInterceptor.__proto__ || Object.getPrototypeOf(CompositeErrorInterceptor)).call(this));
+
+			assert.argumentIsRequired(a, 'a', ErrorInterceptor, 'ErrorInterceptor');
+			assert.argumentIsRequired(b, 'b', ErrorInterceptor, 'ErrorInterceptor');
+
+			_this._a = a;
+			_this._b = b;
+			return _this;
+		}
+
+		_createClass(CompositeErrorInterceptor, [{
+			key: '_onProcess',
+			value: function _onProcess(error, endpoint) {
+				var _this2 = this;
+
+				return this._a.process(error, endpoint).catch(function (adjusted) {
+					return _this2._b.process(adjusted, endpoint);
+				});
+			}
+		}, {
+			key: 'toString',
+			value: function toString() {
+				return '[CompositeErrorInterceptor]';
+			}
+		}]);
+
+		return CompositeErrorInterceptor;
+	}(ErrorInterceptor);
+
+	return CompositeErrorInterceptor;
+}();
+
+},{"./../../../lang/assert":25,"./ErrorInterceptor":18}],16:[function(require,module,exports){
+'use strict';
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+var assert = require('./../../../lang/assert');
 
 var RequestInterceptor = require('./RequestInterceptor');
 
@@ -1802,11 +2262,11 @@ module.exports = function () {
 
 		_createClass(CompositeRequestInterceptor, [{
 			key: '_onProcess',
-			value: function _onProcess(request) {
+			value: function _onProcess(request, endpoint) {
 				var _this2 = this;
 
-				return this._a.process(request).then(function (adjusted) {
-					return _this2._b.process(adjusted);
+				return this._a.process(request, endpoint).then(function (adjusted) {
+					return _this2._b.process(adjusted, endpoint);
 				});
 			}
 		}, {
@@ -1822,7 +2282,7 @@ module.exports = function () {
 	return CompositeRequestInterceptor;
 }();
 
-},{"./RequestInterceptor":16,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],15:[function(require,module,exports){
+},{"./../../../lang/assert":25,"./RequestInterceptor":19}],17:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -1833,8 +2293,7 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    is = require('@barchart/common-js/lang/is');
+var assert = require('./../../../lang/assert');
 
 var ResponseInterceptor = require('./ResponseInterceptor');
 
@@ -1868,11 +2327,11 @@ module.exports = function () {
 
 		_createClass(CompositeResponseInterceptor, [{
 			key: '_onProcess',
-			value: function _onProcess(response) {
+			value: function _onProcess(response, endpoint) {
 				var _this2 = this;
 
-				return this._a.process(response).then(function (adjusted) {
-					return _this2._b.process(adjusted);
+				return this._a.process(response, endpoint).then(function (adjusted) {
+					return _this2._b.process(adjusted, endpoint);
 				});
 			}
 		}, {
@@ -1888,7 +2347,7 @@ module.exports = function () {
 	return CompositeResponseInterceptor;
 }();
 
-},{"./ResponseInterceptor":17,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],16:[function(require,module,exports){
+},{"./../../../lang/assert":25,"./ResponseInterceptor":20}],18:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -1899,8 +2358,170 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    is = require('@barchart/common-js/lang/is');
+var assert = require('./../../../lang/assert'),
+    is = require('./../../../lang/is');
+
+var FailureReason = require('./../../failures/FailureReason'),
+    FailureType = require('./../../failures/FailureType');
+
+module.exports = function () {
+	'use strict';
+
+	/**
+  * A processor that transforms web service error before passing
+  * it on to the original requestor.
+  *
+  * @public
+  * @interface
+  */
+
+	var ErrorInterceptor = function () {
+		function ErrorInterceptor() {
+			_classCallCheck(this, ErrorInterceptor);
+		}
+
+		/**
+   * Adjusts incoming error before the response is forwarded
+   * back to the original caller.
+   *
+   * @public
+   * @param {Object} error
+   * @param {Endpoint} endpoint - The endpoint which is originating the request.
+   * @returns {Promise.<TResult>}
+   */
+
+
+		_createClass(ErrorInterceptor, [{
+			key: 'process',
+			value: function process(error, endpoint) {
+				var _this = this;
+
+				return Promise.resolve().then(function () {
+					return _this._onProcess(error, endpoint);
+				});
+			}
+		}, {
+			key: '_onProcess',
+			value: function _onProcess(error, endpoint) {
+				return Promise.reject(error);
+			}
+
+			/**
+    * A no-op error interceptor which rejects using raw response data.
+    *
+    * @public
+    * @static
+    * @returns {ErrorInterceptor}
+    */
+
+		}, {
+			key: 'toString',
+			value: function toString() {
+				return '[ErrorInterceptor]';
+			}
+		}], [{
+			key: 'fromDelegate',
+
+
+			/**
+    * Returns a new {@link ErrorInterceptor} which delegates its work to another function.
+    *
+    * @public
+    * @static
+    * @param {Function} delegate
+    * @returns {ErrorInterceptor}
+    */
+			value: function fromDelegate(delegate) {
+				return new DelegateErrorInterceptor(delegate);
+			}
+		}, {
+			key: 'EMPTY',
+			get: function get() {
+				return errorInterceptorEmpty;
+			}
+
+			/**
+    * An error interceptor that handles most server-side issues and rejects
+    * using formatted {@link FailureReasons} when an error is detected.
+    *
+    * @public
+    * @static
+    * @returns {ErrorInterceptor}
+    */
+
+		}, {
+			key: 'GENERAL',
+			get: function get() {
+				return errorInterceptorGeneral;
+			}
+		}]);
+
+		return ErrorInterceptor;
+	}();
+
+	var DelegateErrorInterceptor = function (_ErrorInterceptor) {
+		_inherits(DelegateErrorInterceptor, _ErrorInterceptor);
+
+		function DelegateErrorInterceptor(delegate) {
+			_classCallCheck(this, DelegateErrorInterceptor);
+
+			var _this2 = _possibleConstructorReturn(this, (DelegateErrorInterceptor.__proto__ || Object.getPrototypeOf(DelegateErrorInterceptor)).call(this));
+
+			assert.argumentIsRequired(delegate, 'delegate', Function);
+
+			_this2._delegate = delegate;
+			return _this2;
+		}
+
+		_createClass(DelegateErrorInterceptor, [{
+			key: '_onProcess',
+			value: function _onProcess(response, endpoint) {
+				return this._delegate(response, endpoint);
+			}
+		}, {
+			key: 'toString',
+			value: function toString() {
+				return '[DelegateErrorInterceptor]';
+			}
+		}]);
+
+		return DelegateErrorInterceptor;
+	}(ErrorInterceptor);
+
+	var errorInterceptorEmpty = new ErrorInterceptor();
+
+	var errorInterceptorGeneral = new DelegateErrorInterceptor(function (error, endpoint) {
+		var response = error.response;
+
+		var rejectPromise = void 0;
+
+		if (is.object(response) && is.object(response.headers) && response.headers['content-type'] === 'application/json' && is.object(response.data)) {
+			rejectPromise = Promise.reject(response.data);
+		} else if (is.undefined(response) && error.message === 'Network Error') {
+			rejectPromise = Promise.reject(FailureReason.forRequest({ endpoint: endpoint }).addItem(FailureType.REQUEST_AUTHORIZATION_FAILURE).format());
+		} else {
+			rejectPromise = Promise.reject(FailureReason.forRequest({ endpoint: endpoint }).addItem(FailureType.REQUEST_GENERAL_FAILURE).format());
+		}
+
+		return rejectPromise;
+	});
+
+	return ErrorInterceptor;
+}();
+
+},{"./../../../lang/assert":25,"./../../../lang/is":27,"./../../failures/FailureReason":4,"./../../failures/FailureType":6}],19:[function(require,module,exports){
+'use strict';
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var assert = require('./../../../lang/assert'),
+    is = require('./../../../lang/is');
 
 module.exports = function () {
 	'use strict';
@@ -1922,13 +2543,14 @@ module.exports = function () {
    *
    * @public
    * @param {Object} request
+   * @param {Endpoint} endpoint - The endpoint which is originating the request.
    * @returns {Promise.<TResult>}
    */
 
 
 		_createClass(RequestInterceptor, [{
 			key: 'process',
-			value: function process(request) {
+			value: function process(request, endpoint) {
 				var _this = this;
 
 				return Promise.resolve().then(function () {
@@ -1937,7 +2559,7 @@ module.exports = function () {
 			}
 		}, {
 			key: '_onProcess',
-			value: function _onProcess(request, payload) {
+			value: function _onProcess(request, endpoint) {
 				return request;
 			}
 
@@ -1995,8 +2617,8 @@ module.exports = function () {
 
 		_createClass(DelegateRequestInterceptor, [{
 			key: '_onProcess',
-			value: function _onProcess(request) {
-				return this._delegate(request);
+			value: function _onProcess(request, endpoint) {
+				return this._delegate(request, endpoint);
 			}
 		}, {
 			key: 'toString',
@@ -2013,7 +2635,7 @@ module.exports = function () {
 	return RequestInterceptor;
 }();
 
-},{"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],17:[function(require,module,exports){
+},{"./../../../lang/assert":25,"./../../../lang/is":27}],20:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -2024,8 +2646,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var assert = require('@barchart/common-js/lang/assert'),
-    is = require('@barchart/common-js/lang/is');
+var assert = require('./../../../lang/assert'),
+    is = require('./../../../lang/is');
 
 module.exports = function () {
 	'use strict';
@@ -2045,26 +2667,27 @@ module.exports = function () {
 
 		/**
    * Adjusts incoming response data before the response is forwarded
-   * back to the orginal caller.
+   * back to the original caller.
    *
    * @public
    * @param {Object} request
+   * @param {Endpoint} endpoint - The endpoint which is originating the request.
    * @returns {Promise.<TResult>}
    */
 
 
 		_createClass(ResponseInterceptor, [{
 			key: 'process',
-			value: function process(response) {
+			value: function process(response, endpoint) {
 				var _this = this;
 
 				return Promise.resolve().then(function () {
-					return _this._onProcess(response);
+					return _this._onProcess(response, endpoint);
 				});
 			}
 		}, {
 			key: '_onProcess',
-			value: function _onProcess(response) {
+			value: function _onProcess(response, endpoint) {
 				return response;
 			}
 
@@ -2137,8 +2760,8 @@ module.exports = function () {
 
 		_createClass(DelegateResponseInterceptor, [{
 			key: '_onProcess',
-			value: function _onProcess(response) {
-				return this._delegate(response);
+			value: function _onProcess(response, endpoint) {
+				return this._delegate(response, endpoint);
 			}
 		}, {
 			key: 'toString',
@@ -2152,14 +2775,323 @@ module.exports = function () {
 
 	var responseInterceptorEmpty = new ResponseInterceptor();
 
-	var responseInterceptorData = new DelegateResponseInterceptor(function (response) {
+	var responseInterceptorData = new DelegateResponseInterceptor(function (response, ignored) {
 		return response.data;
 	});
 
 	return ResponseInterceptor;
 }();
 
-},{"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23}],18:[function(require,module,exports){
+},{"./../../../lang/assert":25,"./../../../lang/is":27}],21:[function(require,module,exports){
+'use strict';
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var is = require('./../lang/is');
+
+module.exports = function () {
+	'use strict';
+
+	/**
+  * A tree data structure. Each instance represents a node, holding
+  * an item, a reference to the parent node, and a reference to
+  * children nodes. Children are stored in insertion order.
+  *
+  * @public
+  * @param {*} value - The value of the node.
+  * @param {Tree} parent - The parent node. If not supplied, this will be the root node.
+  */
+
+	var Tree = function () {
+		function Tree(value, parent) {
+			_classCallCheck(this, Tree);
+
+			this._value = value;
+
+			this._parent = parent || null;
+			this._children = [];
+		}
+
+		/**
+   * Returns the parent node. If this is the root node, a null value is returned.
+   *
+   * @public
+   * @returns {Tree|null}
+   */
+
+
+		_createClass(Tree, [{
+			key: 'getParent',
+			value: function getParent() {
+				return this._parent;
+			}
+
+			/**
+    * Returns the collection of children nodes.
+    *
+    * @public
+    * @returns {Array<Tree>}
+    */
+
+		}, {
+			key: 'getChildren',
+			value: function getChildren() {
+				return this._children;
+			}
+
+			/**
+    * Returns the value associated with the current node.
+    *
+    * @public
+    * @returns {*}
+    */
+
+		}, {
+			key: 'getValue',
+			value: function getValue() {
+				return this._value;
+			}
+
+			/**
+    * Returns true if this node has no children; otherwise false.
+    *
+    * @public
+    * @returns {boolean}
+    */
+
+		}, {
+			key: 'getIsLeaf',
+			value: function getIsLeaf() {
+				return this._children.length === 0;
+			}
+
+			/**
+    * Returns true if this node has no parent; otherwise false.
+    *
+    * @public
+    * @returns {boolean}
+    */
+
+		}, {
+			key: 'getIsRoot',
+			value: function getIsRoot() {
+				return this._parent === null;
+			}
+
+			/**
+    * Adds a child node to the current node and returns a reference
+    * to the child node.
+    *
+    * @public
+    * @param {*} value - The value of the child.
+    * @returns {Tree}
+    */
+
+		}, {
+			key: 'addChild',
+			value: function addChild(value) {
+				var returnRef = new Tree(value, this);
+
+				this._children.push(returnRef);
+
+				return returnRef;
+			}
+
+			/**
+    * Removes a child node.
+    *
+    * @public
+    * @param {Tree} node - The child to remove.
+    */
+
+		}, {
+			key: 'removeChild',
+			value: function removeChild(node) {
+				for (var i = this._children.length - 1; !(i < 0); i--) {
+					var child = this._children[i];
+
+					if (child === node) {
+						this._children.splice(i, 1);
+
+						child._parent = null;
+						child._children = [];
+
+						break;
+					}
+				}
+			}
+
+			/**
+    * Searches the children nodes for the first child node that matches the
+    * predicate.
+    *
+    * @public
+    * @param {Tree~nodePredicate} predicate - A predicate that tests each child node. The predicate takes two arguments -- the node's value, and the node itself.
+    * @returns {Tree|null}
+    */
+
+		}, {
+			key: 'findChild',
+			value: function findChild(predicate) {
+				var returnRef = null;
+
+				for (var i = 0; i < this._children.length; i++) {
+					var child = this._children[i];
+
+					if (predicate(child.getValue(), child)) {
+						returnRef = child;
+
+						break;
+					}
+				}
+
+				return returnRef;
+			}
+
+			/**
+    * Searches the tree recursively, starting with the current node.
+    *
+    * @public
+    * @param {Tree~nodePredicate} predicate - A predicate that tests each child node. The predicate takes two arguments -- the node's value, and the node itself.
+    * @param {boolean=} childrenFirst - True, if the tree should be searched depth first.
+    * @param {boolean=} includeCurrentNode - True, if the current node should be checked against the predicate.
+    * @returns {Tree|null}
+    */
+
+		}, {
+			key: 'search',
+			value: function search(predicate, childrenFirst, includeCurrentNode) {
+				var returnRef = null;
+
+				if (returnRef === null && childrenFirst && includeCurrentNode && predicate(this.getValue(), this)) {
+					returnRef = this;
+				}
+
+				for (var i = 0; i < this._children.length; i++) {
+					var child = this._children[i];
+
+					returnRef = child.search(predicate, childrenFirst, true);
+
+					if (returnRef !== null) {
+						break;
+					}
+				}
+
+				if (returnRef === null && !childrenFirst && includeCurrentNode && predicate(this.getValue(), this)) {
+					returnRef = this;
+				}
+
+				return returnRef;
+			}
+
+			/**
+    * Walks the children of the current node, running an action on each node.
+    *
+    * @public
+    * @param {Tree~nodeAction} walkAction - A action to apply to each node. The action takes two arguments -- the node's value, and the node itself.
+    * @param {boolean=} childrenFirst - True if the tree should be walked depth first.
+    * @param {boolean=} includeCurrentNode - True if the current node should be applied to the action.
+    */
+
+		}, {
+			key: 'walk',
+			value: function walk(walkAction, childrenFirst, includeCurrentNode) {
+				var predicate = function predicate(value, node) {
+					walkAction(value, node);
+
+					return false;
+				};
+
+				this.search(predicate, childrenFirst, includeCurrentNode);
+			}
+
+			/**
+    * Climbs the parents of the current node -- current node up to the root node, running an action on each node.
+    *
+    * @public
+    * @param {Tree~nodeAction} climbAction - A action to apply to each node. The action takes two arguments -- the node's value, and the node itself.
+    * @param {boolean=} includeCurrentNode - True if the current node should be applied to the action.
+    */
+
+		}, {
+			key: 'climb',
+			value: function climb(climbAction, includeCurrentNode) {
+				if (includeCurrentNode) {
+					climbAction(this.getValue(), this);
+				}
+
+				if (this._parent !== null) {
+					this._parent.climb(climbAction, true);
+				}
+			}
+
+			/**
+    * Creates a representation of the tree using JavaScript objects and arrays.
+    *
+    * @public
+    * @param {Function=} valueConverter - An optional function for converting the value of each node.
+    * @param {Boolean=} valueConverter - If true, empty children arrays will be excluded from output.
+    * @returns {Object}
+    */
+
+		}, {
+			key: 'toJSObj',
+			value: function toJSObj(valueConverter, omitEmptyChildren) {
+				var valueConverterToUse = void 0;
+
+				if (is.fn(valueConverter)) {
+					valueConverterToUse = valueConverter;
+				} else {
+					valueConverterToUse = function valueConverterToUse(x) {
+						return x;
+					};
+				}
+
+				var converted = {
+					value: valueConverterToUse(this._value)
+				};
+
+				if (!(is.boolean(omitEmptyChildren) && omitEmptyChildren && this._children.length === 0)) {
+					converted.children = this._children.map(function (child) {
+						return child.toJSObj(valueConverter, omitEmptyChildren);
+					});
+				}
+
+				return converted;
+			}
+		}, {
+			key: 'toString',
+			value: function toString() {
+				return '[Tree]';
+			}
+		}]);
+
+		return Tree;
+	}();
+
+	/**
+  * A predicate that is used to check a node (i.e. {@link Tree}).
+  *
+  * @callback Tree~nodePredicate
+  * @param {*} item - The candidate node's item
+  * @param {Tree} node - The candidate node.
+  * @returns {Boolean}
+  */
+
+	/**
+  * An action that is run on a node (i.e. {@link Tree}).
+  *
+  * @callback Tree~nodeAction
+  * @param {*} item - The candidate node's item
+  * @param {Tree} node - The candidate node.
+  */
+
+	return Tree;
+}();
+
+},{"./../lang/is":27}],22:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -2308,7 +3240,7 @@ module.exports = function () {
 	return Disposable;
 }();
 
-},{"./assert":21}],19:[function(require,module,exports){
+},{"./assert":25}],23:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -2450,7 +3382,7 @@ module.exports = function () {
 	return Enum;
 }();
 
-},{"./assert":21}],20:[function(require,module,exports){
+},{"./assert":25}],24:[function(require,module,exports){
 'use strict';
 
 var assert = require('./assert'),
@@ -2788,7 +3720,7 @@ module.exports = function () {
 	};
 }();
 
-},{"./assert":21,"./is":23}],21:[function(require,module,exports){
+},{"./assert":25,"./is":27}],25:[function(require,module,exports){
 'use strict';
 
 var is = require('./is');
@@ -2916,7 +3848,7 @@ module.exports = function () {
    * @param {*} variable - The value to check.
    * @param {String} variableName - The name of the value (used for formatting an error message).
    * @param {Function=} predicate - A function used to validate the item (beyond type checking).
-   * @param {Function=} predicateDescription - A description of the assertion made by the predicate (e.g. "is an integer") that is used for formatting an error message.
+   * @param {String=} predicateDescription - A description of the assertion made by the predicate (e.g. "is an integer") that is used for formatting an error message.
    */
 		argumentIsValid: function argumentIsValid(variable, variableName, predicate, predicateDescription) {
 			if (!predicate(variable)) {
@@ -2936,7 +3868,7 @@ module.exports = function () {
 	};
 }();
 
-},{"./is":23}],22:[function(require,module,exports){
+},{"./is":27}],26:[function(require,module,exports){
 'use strict';
 
 var assert = require('./assert'),
@@ -3108,7 +4040,7 @@ module.exports = function () {
 	};
 }();
 
-},{"./assert":21,"./is":23}],23:[function(require,module,exports){
+},{"./assert":25,"./is":27}],27:[function(require,module,exports){
 'use strict';
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
@@ -3331,7 +4263,7 @@ module.exports = function () {
 	};
 }();
 
-},{}],24:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 'use strict';
 
 var array = require('./array'),
@@ -3373,15 +4305,19 @@ module.exports = function () {
 					returnVal = false;
 				}
 			} else if (is.object(a) && is.object(b)) {
-				var keysA = object.keys(a);
-				var keysB = object.keys(b);
+				if (is.fn(a.equals) && is.fn(b.equals)) {
+					returnVal = a.equals(b);
+				} else {
+					var keysA = object.keys(a);
+					var keysB = object.keys(b);
 
-				returnVal = array.differenceSymmetric(keysA, keysB).length === 0 && keysA.every(function (key) {
-					var valueA = a[key];
-					var valueB = b[key];
+					returnVal = array.differenceSymmetric(keysA, keysB).length === 0 && keysA.every(function (key) {
+						var valueA = a[key];
+						var valueB = b[key];
 
-					return object.equals(valueA, valueB);
-				});
+						return object.equals(valueA, valueB);
+					});
+				}
 			} else {
 				returnVal = false;
 			}
@@ -3476,7 +4412,7 @@ module.exports = function () {
 	return object;
 }();
 
-},{"./array":20,"./is":23}],25:[function(require,module,exports){
+},{"./array":24,"./is":27}],29:[function(require,module,exports){
 'use strict';
 
 var assert = require('./assert');
@@ -3668,7 +4604,7 @@ module.exports = function () {
 	};
 }();
 
-},{"./assert":21}],26:[function(require,module,exports){
+},{"./assert":25}],30:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -3798,6 +4734,7 @@ module.exports = function () {
     * @param {number=} maximumAttempts - The number of attempts to before giving up.
     * @param {Function=} failureCallback - If provided, will be invoked if a function is considered to be failing.
     * @param {Object=} failureValue - If provided, will consider the result to have failed, if this value is returned (a deep equality check is used). If not provided, a "falsey" value will trigger a retry.
+    * @returns {Promise}
     */
 
 		}, {
@@ -3915,7 +4852,7 @@ module.exports = function () {
 	return Scheduler;
 }();
 
-},{"./../lang/Disposable":18,"./../lang/assert":21,"./../lang/is":23,"./../lang/object":24,"./../lang/promise":25}],27:[function(require,module,exports){
+},{"./../lang/Disposable":22,"./../lang/assert":25,"./../lang/is":27,"./../lang/object":28,"./../lang/promise":29}],31:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -3932,13 +4869,15 @@ var assert = require('@barchart/common-js/lang/assert'),
     is = require('@barchart/common-js/lang/is'),
     Scheduler = require('@barchart/common-js/timing/Scheduler');
 
-var EndpointBuilder = require('@barchart/common-client-js/http/builders/EndpointBuilder'),
-    Endpoint = require('@barchart/common-client-js/http/definitions/Endpoint'),
-    Gateway = require('@barchart/common-client-js/http/Gateway'),
-    ProtocolType = require('@barchart/common-client-js/http/definitions/ProtocolType'),
-    RequestInterceptor = require('@barchart/common-client-js/http/interceptors/RequestInterceptor'),
-    ResponseInterceptor = require('@barchart/common-client-js/http/interceptors/ResponseInterceptor'),
-    VerbType = require('@barchart/common-client-js/http/definitions/VerbType');
+var EndpointBuilder = require('@barchart/common-js/api/http/builders/EndpointBuilder'),
+    Endpoint = require('@barchart/common-js/api/http/definitions/Endpoint'),
+    FailureReason = require('@barchart/common-js/api/failures/FailureReason'),
+    FailureType = require('@barchart/common-js/api/failures/FailureType'),
+    Gateway = require('@barchart/common-js/api/http/Gateway'),
+    ProtocolType = require('@barchart/common-js/api/http/definitions/ProtocolType'),
+    RequestInterceptor = require('@barchart/common-js/api/http/interceptors/RequestInterceptor'),
+    ResponseInterceptor = require('@barchart/common-js/api/http/interceptors/ResponseInterceptor'),
+    VerbType = require('@barchart/common-js/api/http/definitions/VerbType');
 
 module.exports = function () {
 	'use strict';
@@ -3995,7 +4934,7 @@ module.exports = function () {
 						}).catch(function (e) {
 							_this2._startPromise = null;
 
-							throw e;
+							return Promise.reject(e);
 						});
 					}
 
@@ -4019,6 +4958,10 @@ module.exports = function () {
 					checkStart.call(_this3);
 
 					return Gateway.invoke(_this3._endpoint);
+				}).catch(function (e) {
+					var failure = FailureReason.forRequest({ endpoint: _this3._endpoint }).addItem(FailureType.REQUEST_IDENTITY_FAILURE).format();
+
+					return Promise.reject(failure);
 				});
 			}
 
@@ -4036,23 +4979,39 @@ module.exports = function () {
 
 				var scheduler = new Scheduler();
 
+				var cachePromise = null;
+				var cacheDisposable = null;
+
 				var refreshToken = function refreshToken() {
-					return scheduler.backoff(function () {
+					var refreshPromise = scheduler.backoff(function () {
 						return _this4.readToken();
-					}, 100, 'Read JWT token', 3);
+					}, 100, 'Read JWT token', 3).then(function (token) {
+						if (_this4._refreshInterval) {
+							cachePromise = refreshPromise;
+						}
+
+						if (cacheDisposable === null) {
+							cacheDisposable = scheduler.repeat(function () {
+								return refreshToken();
+							}, _this4._refreshInterval, 'Refresh JWT token');
+						}
+
+						return token;
+					}).catch(function (e) {
+						if (cacheDisposable !== null) {
+							cacheDisposable.dispose();
+
+							cacheDisposable = null;
+							cachePromise = null;
+						}
+
+						return Promise.reject(e);
+					});
+
+					return refreshPromise;
 				};
 
-				var cachePromise = null;
-
-				if (this._refreshInterval > 0) {
-					cachePromise = refreshToken();
-
-					scheduler.repeat(function () {
-						return cachePromise = refreshToken();
-					}, this._refreshInterval, 'Refresh JWT token');
-				}
-
-				var delegate = function delegate(options) {
+				var delegate = function delegate(options, endpoint) {
 					var tokenPromise = void 0;
 
 					if (cachePromise !== null) {
@@ -4066,6 +5025,10 @@ module.exports = function () {
 						options.headers.Authorization = 'Bearer ' + token;
 
 						return options;
+					}).catch(function (e) {
+						var failure = FailureReason.forRequest({ endpoint: endpoint }).addItem(FailureType.REQUEST_IDENTITY_FAILURE).format();
+
+						return Promise.reject(failure);
 					});
 				};
 
@@ -4166,16 +5129,16 @@ module.exports = function () {
 	}
 
 	function _forDevelopment(host, userId) {
-		return EndpointBuilder.for('read-jwt-token-for-development').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHost(host).withPathBuilder(function (pb) {
-			return pb.withLiteralParameter('v1').withLiteralParameter('token');
+		return EndpointBuilder.for('read-jwt-token-for-development', 'lookup user identity').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHost(host).withPathBuilder(function (pb) {
+			return pb.withLiteralParameter('version', 'v1').withLiteralParameter('token', 'token');
 		}).withQueryBuilder(function (qb) {
-			return qb.withLiteralParameter('userId', userId);
+			return qb.withLiteralParameter('user', 'userId', userId);
 		}).withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
 	}
 
 	function _forProduction(host) {
-		return EndpointBuilder.for('read-jwt-token-for-production').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHeadersBuilder(function (hb) {
-			return hb.withLiteralParameter('X-GAM-CLIENT-APP-ID', '1348').withLiteralParameter('X-GAM-CLIENT-APP-SECRET', '1bcc5c85-e833-4936-9313-abe5dfdcef76');
+		return EndpointBuilder.for('read-jwt-token-for-production', 'lookup user identity').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHeadersBuilder(function (hb) {
+			return hb.withLiteralParameter('X-GAM-CLIENT-APP-ID', 'X-GAM-CLIENT-APP-ID', '1348').withLiteralParameter('X-GAM-CLIENT-APP-SECRET', 'X-GAM-CLIENT-APP-SECRET', '1bcc5c85-e833-4936-9313-abe5dfdcef76');
 		}).withHost(host).withRequestInterceptor(RequestInterceptor.fromDelegate(function (request) {
 			request.withCredentials = true;
 
@@ -4188,9 +5151,9 @@ module.exports = function () {
 	return JwtGateway;
 }();
 
-},{"@barchart/common-client-js/http/Gateway":4,"@barchart/common-client-js/http/builders/EndpointBuilder":5,"@barchart/common-client-js/http/definitions/Endpoint":9,"@barchart/common-client-js/http/definitions/ProtocolType":12,"@barchart/common-client-js/http/definitions/VerbType":13,"@barchart/common-client-js/http/interceptors/RequestInterceptor":16,"@barchart/common-client-js/http/interceptors/ResponseInterceptor":17,"@barchart/common-js/lang/Disposable":18,"@barchart/common-js/lang/Enum":19,"@barchart/common-js/lang/assert":21,"@barchart/common-js/lang/is":23,"@barchart/common-js/timing/Scheduler":26}],28:[function(require,module,exports){
+},{"@barchart/common-js/api/failures/FailureReason":4,"@barchart/common-js/api/failures/FailureType":6,"@barchart/common-js/api/http/Gateway":7,"@barchart/common-js/api/http/builders/EndpointBuilder":8,"@barchart/common-js/api/http/definitions/Endpoint":10,"@barchart/common-js/api/http/definitions/ProtocolType":13,"@barchart/common-js/api/http/definitions/VerbType":14,"@barchart/common-js/api/http/interceptors/RequestInterceptor":19,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":20,"@barchart/common-js/lang/Disposable":22,"@barchart/common-js/lang/Enum":23,"@barchart/common-js/lang/assert":25,"@barchart/common-js/lang/is":27,"@barchart/common-js/timing/Scheduler":30}],32:[function(require,module,exports){
 module.exports = require('./lib/axios');
-},{"./lib/axios":30}],29:[function(require,module,exports){
+},{"./lib/axios":34}],33:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -4374,7 +5337,7 @@ module.exports = function xhrAdapter(config) {
 };
 
 }).call(this,require('_process'))
-},{"../core/createError":36,"./../core/settle":39,"./../helpers/btoa":43,"./../helpers/buildURL":44,"./../helpers/cookies":46,"./../helpers/isURLSameOrigin":48,"./../helpers/parseHeaders":50,"./../utils":52,"_process":53}],30:[function(require,module,exports){
+},{"../core/createError":40,"./../core/settle":43,"./../helpers/btoa":47,"./../helpers/buildURL":48,"./../helpers/cookies":50,"./../helpers/isURLSameOrigin":52,"./../helpers/parseHeaders":54,"./../utils":56,"_process":57}],34:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -4428,7 +5391,7 @@ module.exports = axios;
 // Allow use of default import syntax in TypeScript
 module.exports.default = axios;
 
-},{"./cancel/Cancel":31,"./cancel/CancelToken":32,"./cancel/isCancel":33,"./core/Axios":34,"./defaults":41,"./helpers/bind":42,"./helpers/spread":51,"./utils":52}],31:[function(require,module,exports){
+},{"./cancel/Cancel":35,"./cancel/CancelToken":36,"./cancel/isCancel":37,"./core/Axios":38,"./defaults":45,"./helpers/bind":46,"./helpers/spread":55,"./utils":56}],35:[function(require,module,exports){
 'use strict';
 
 /**
@@ -4449,7 +5412,7 @@ Cancel.prototype.__CANCEL__ = true;
 
 module.exports = Cancel;
 
-},{}],32:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 'use strict';
 
 var Cancel = require('./Cancel');
@@ -4508,14 +5471,14 @@ CancelToken.source = function source() {
 
 module.exports = CancelToken;
 
-},{"./Cancel":31}],33:[function(require,module,exports){
+},{"./Cancel":35}],37:[function(require,module,exports){
 'use strict';
 
 module.exports = function isCancel(value) {
   return !!(value && value.__CANCEL__);
 };
 
-},{}],34:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 'use strict';
 
 var defaults = require('./../defaults');
@@ -4596,7 +5559,7 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 
 module.exports = Axios;
 
-},{"./../defaults":41,"./../utils":52,"./InterceptorManager":35,"./dispatchRequest":37}],35:[function(require,module,exports){
+},{"./../defaults":45,"./../utils":56,"./InterceptorManager":39,"./dispatchRequest":41}],39:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -4650,7 +5613,7 @@ InterceptorManager.prototype.forEach = function forEach(fn) {
 
 module.exports = InterceptorManager;
 
-},{"./../utils":52}],36:[function(require,module,exports){
+},{"./../utils":56}],40:[function(require,module,exports){
 'use strict';
 
 var enhanceError = require('./enhanceError');
@@ -4670,7 +5633,7 @@ module.exports = function createError(message, config, code, request, response) 
   return enhanceError(error, config, code, request, response);
 };
 
-},{"./enhanceError":38}],37:[function(require,module,exports){
+},{"./enhanceError":42}],41:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -4758,7 +5721,7 @@ module.exports = function dispatchRequest(config) {
   });
 };
 
-},{"../cancel/isCancel":33,"../defaults":41,"./../helpers/combineURLs":45,"./../helpers/isAbsoluteURL":47,"./../utils":52,"./transformData":40}],38:[function(require,module,exports){
+},{"../cancel/isCancel":37,"../defaults":45,"./../helpers/combineURLs":49,"./../helpers/isAbsoluteURL":51,"./../utils":56,"./transformData":44}],42:[function(require,module,exports){
 'use strict';
 
 /**
@@ -4781,7 +5744,7 @@ module.exports = function enhanceError(error, config, code, request, response) {
   return error;
 };
 
-},{}],39:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 'use strict';
 
 var createError = require('./createError');
@@ -4809,7 +5772,7 @@ module.exports = function settle(resolve, reject, response) {
   }
 };
 
-},{"./createError":36}],40:[function(require,module,exports){
+},{"./createError":40}],44:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -4831,7 +5794,7 @@ module.exports = function transformData(data, headers, fns) {
   return data;
 };
 
-},{"./../utils":52}],41:[function(require,module,exports){
+},{"./../utils":56}],45:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -4927,7 +5890,7 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 module.exports = defaults;
 
 }).call(this,require('_process'))
-},{"./adapters/http":29,"./adapters/xhr":29,"./helpers/normalizeHeaderName":49,"./utils":52,"_process":53}],42:[function(require,module,exports){
+},{"./adapters/http":33,"./adapters/xhr":33,"./helpers/normalizeHeaderName":53,"./utils":56,"_process":57}],46:[function(require,module,exports){
 'use strict';
 
 module.exports = function bind(fn, thisArg) {
@@ -4940,7 +5903,7 @@ module.exports = function bind(fn, thisArg) {
   };
 };
 
-},{}],43:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 'use strict';
 
 // btoa polyfill for IE<10 courtesy https://github.com/davidchambers/Base64.js
@@ -4978,7 +5941,7 @@ function btoa(input) {
 
 module.exports = btoa;
 
-},{}],44:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -5048,7 +6011,7 @@ module.exports = function buildURL(url, params, paramsSerializer) {
   return url;
 };
 
-},{"./../utils":52}],45:[function(require,module,exports){
+},{"./../utils":56}],49:[function(require,module,exports){
 'use strict';
 
 /**
@@ -5064,7 +6027,7 @@ module.exports = function combineURLs(baseURL, relativeURL) {
     : baseURL;
 };
 
-},{}],46:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -5119,7 +6082,7 @@ module.exports = (
   })()
 );
 
-},{"./../utils":52}],47:[function(require,module,exports){
+},{"./../utils":56}],51:[function(require,module,exports){
 'use strict';
 
 /**
@@ -5135,7 +6098,7 @@ module.exports = function isAbsoluteURL(url) {
   return /^([a-z][a-z\d\+\-\.]*:)?\/\//i.test(url);
 };
 
-},{}],48:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -5205,7 +6168,7 @@ module.exports = (
   })()
 );
 
-},{"./../utils":52}],49:[function(require,module,exports){
+},{"./../utils":56}],53:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -5219,7 +6182,7 @@ module.exports = function normalizeHeaderName(headers, normalizedName) {
   });
 };
 
-},{"../utils":52}],50:[function(require,module,exports){
+},{"../utils":56}],54:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -5274,7 +6237,7 @@ module.exports = function parseHeaders(headers) {
   return parsed;
 };
 
-},{"./../utils":52}],51:[function(require,module,exports){
+},{"./../utils":56}],55:[function(require,module,exports){
 'use strict';
 
 /**
@@ -5303,7 +6266,7 @@ module.exports = function spread(callback) {
   };
 };
 
-},{}],52:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 'use strict';
 
 var bind = require('./helpers/bind');
@@ -5608,7 +6571,7 @@ module.exports = {
   trim: trim
 };
 
-},{"./helpers/bind":42,"is-buffer":54}],53:[function(require,module,exports){
+},{"./helpers/bind":46,"is-buffer":58}],57:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -5794,7 +6757,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],54:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
