@@ -62,7 +62,7 @@
 
 				that.connecting(true);
 
-				Barchart.UserConfiguration.UserConfigurationGateway.forDevelopment(Barchart.Jwt.JwtProvider.forDevelopmentClient(that.user()))
+				Barchart.UserConfiguration.UserConfigurationGateway.forDevelopment(Barchart.Jwt.JwtProvider.forDevelopmentClient(Barchart.UserConfiguration.JwtEndpoint.forDevelopment(that.user())))
                     .then((gateway) => {
 						that.gateway = gateway;
 
