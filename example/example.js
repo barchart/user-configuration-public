@@ -233,7 +233,7 @@ module.exports = function () {
 
 	return {
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.0.5'
+		version: '1.0.6'
 	};
 }();
 
@@ -612,6 +612,19 @@ module.exports = function () {
 			}
 
 			/**
+    * A data point is malformed.
+    *
+    * @static
+    * @returns {FailureType}
+    */
+
+		}, {
+			key: 'REQUEST_PARAMETER_MALFORMED',
+			get: function get() {
+				return requestParameterMalformed;
+			}
+
+			/**
     * User identity could not be determined.
     *
     * @static
@@ -669,6 +682,7 @@ module.exports = function () {
 
 	var requestConstructionFailure = new FailureType('REQUEST_CONSTRUCTION_FAILURE', 'An attempt to {L|root.endpoint.description} failed because some required information is missing.');
 	var requestParameterMissing = new FailureType('REQUEST_PARAMETER_MISSING', 'The "{L|name}" field is required.');
+	var requestParameterMalformed = new FailureType('REQUEST_PARAMETER_MALFORMED', 'The "{L|name}" field cannot be interpreted.');
 	var requestIdentifyFailure = new FailureType('REQUEST_IDENTITY_FAILURE', 'An attempt to {L|root.endpoint.description} failed because your identity could not be determined.');
 	var requestAuthorizationFailure = new FailureType('REQUEST_AUTHORIZATION_FAILURE', 'An attempt to {L|root.endpoint.description} failed. You are not authorized to perform this action.');
 	var requestInputMalformed = new FailureType('REQUEST_INPUT_MALFORMED', 'An attempt to {L|root.endpoint.description} failed, the data structure is invalid.');
@@ -2591,6 +2605,21 @@ module.exports = function () {
 			value: function fromDelegate(delegate) {
 				return new DelegateRequestInterceptor(delegate);
 			}
+
+			/**
+    * A request interceptor that instructs the framework to skip parsing
+    * of the response's data.
+    *
+    * @public
+    * @static
+    * @return {DelegateRequestInterceptor}
+    */
+
+		}, {
+			key: 'forPlainResponse',
+			value: function forPlainResponse() {
+				return requestInterceptorPlain;
+			}
 		}, {
 			key: 'EMPTY',
 			get: function get() {
@@ -2631,6 +2660,14 @@ module.exports = function () {
 	}(RequestInterceptor);
 
 	var requestInterceptorEmpty = new RequestInterceptor();
+
+	var requestInterceptorPlain = new DelegateRequestInterceptor(function (request) {
+		request.transformResponse = function (data) {
+			return data;
+		};
+
+		return request;
+	});
 
 	return RequestInterceptor;
 }();
