@@ -49,7 +49,7 @@ module.exports = function () {
 		}], [{
 			key: 'developmentHost',
 			get: function get() {
-				return '6q974cgbv4.execute-api.us-east-1.amazonaws.com/dev';
+				return 'user-configuration-dev.aws.barchart.com';
 			}
 
 			/**
@@ -63,7 +63,7 @@ module.exports = function () {
 		}, {
 			key: 'stagingHost',
 			get: function get() {
-				return 'oxb0j7wk18.execute-api.us-east-1.amazonaws.com/stage';
+				return 'user-configuration-stage.aws.barchart.com';
 			}
 
 			/**
@@ -77,7 +77,7 @@ module.exports = function () {
 		}, {
 			key: 'productionHost',
 			get: function get() {
-				return 'a8q3ptjwi6.execute-api.us-east-1.amazonaws.com/prod';
+				return 'user-configuration.aws.barchart.com';
 			}
 		}]);
 
@@ -401,7 +401,7 @@ module.exports = function () {
 	return {
 		JwtEndpoint: JwtEndpoint,
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.0.10'
+		version: '1.0.11'
 	};
 }();
 
