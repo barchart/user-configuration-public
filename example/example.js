@@ -562,12 +562,12 @@ module.exports = function () {
 					}, 750, 'Read JWT token', 3).then(function (token) {
 						if (_this4._refreshInterval) {
 							cachePromise = refreshPromise;
-						}
 
-						if (cacheDisposable === null) {
-							cacheDisposable = scheduler.repeat(function () {
-								return refreshToken();
-							}, _this4._refreshInterval, 'Refresh JWT token');
+							if (cacheDisposable === null) {
+								cacheDisposable = scheduler.repeat(function () {
+									return refreshToken();
+								}, _this4._refreshInterval, 'Refresh JWT token');
+							}
 						}
 
 						return token;
@@ -634,7 +634,7 @@ module.exports = function () {
 				return Promise.resolve().then(function () {
 					assert.argumentIsRequired(userId, 'userId', String);
 
-					var gateway = new JwtGateway(JwtEndpoint.forDevelopment(userId));
+					var gateway = new JwtGateway(JwtEndpoint.forDevelopment(userId), 300000);
 
 					return start(gateway).then(function () {
 						return gateway.toRequestInterceptor();
@@ -657,7 +657,7 @@ module.exports = function () {
 				return Promise.resolve().then(function () {
 					assert.argumentIsRequired(userId, 'userId', String);
 
-					var gateway = new JwtGateway(JwtEndpoint.forDemo(userId));
+					var gateway = new JwtGateway(JwtEndpoint.forDemo(userId), 300000);
 
 					return start(gateway).then(function () {
 						return gateway.toRequestInterceptor();
@@ -703,7 +703,7 @@ module.exports = function () {
 		JwtEndpoint: JwtEndpoint,
 		JwtGateway: JwtGateway,
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.3.6'
+		version: '1.3.7'
 	};
 }();
 
