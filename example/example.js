@@ -632,7 +632,9 @@ module.exports = function () {
 			key: 'forDevelopmentClient',
 			value: function forDevelopmentClient(userId) {
 				return Promise.resolve().then(function () {
-					var gateway = new JwtGateway(JwtEndpoint.forDevelopment(user));
+					assert.argumentIsRequired(userId, 'userId', String);
+
+					var gateway = new JwtGateway(JwtEndpoint.forDevelopment(userId));
 
 					return start(gateway).then(function () {
 						return gateway.toRequestInterceptor();
@@ -653,7 +655,9 @@ module.exports = function () {
 			key: 'forDemoClient',
 			value: function forDemoClient(userId) {
 				return Promise.resolve().then(function () {
-					var gateway = new JwtGateway(JwtEndpoint.forDemo(user));
+					assert.argumentIsRequired(userId, 'userId', String);
+
+					var gateway = new JwtGateway(JwtEndpoint.forDemo(userId));
 
 					return start(gateway).then(function () {
 						return gateway.toRequestInterceptor();
@@ -699,7 +703,7 @@ module.exports = function () {
 		JwtEndpoint: JwtEndpoint,
 		JwtGateway: JwtGateway,
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.3.3'
+		version: '1.3.4'
 	};
 }();
 
