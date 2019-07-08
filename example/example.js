@@ -417,7 +417,7 @@ module.exports = function () {
 		}, {
 			key: 'forDemo',
 			value: function forDemo(user) {
-				return EndpointBuilder.for('read-jwt-token-for-demo', 'lookup user identity').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHost(Configuration.developmentHost).withPathBuilder(function (pb) {
+				return EndpointBuilder.for('read-jwt-token-for-demo', 'lookup user identity').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHost(Configuration.demoHost).withPathBuilder(function (pb) {
 					return pb.withLiteralParameter('version', 'v1').withLiteralParameter('token', 'token');
 				}).withQueryBuilder(function (qb) {
 					return qb.withLiteralParameter('user', 'userId', user);
@@ -703,7 +703,7 @@ module.exports = function () {
 		JwtEndpoint: JwtEndpoint,
 		JwtGateway: JwtGateway,
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.3.5'
+		version: '1.3.6'
 	};
 }();
 
