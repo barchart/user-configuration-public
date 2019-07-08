@@ -559,7 +559,7 @@ module.exports = function () {
 				var refreshToken = function refreshToken() {
 					var refreshPromise = scheduler.backoff(function () {
 						return _this4.readToken();
-					}, 0, 'Read JWT token', 3).then(function (token) {
+					}, 750, 'Read JWT token', 3).then(function (token) {
 						if (_this4._refreshInterval) {
 							cachePromise = refreshPromise;
 						}
@@ -703,7 +703,7 @@ module.exports = function () {
 		JwtEndpoint: JwtEndpoint,
 		JwtGateway: JwtGateway,
 		UserConfigurationGateway: UserConfigurationGateway,
-		version: '1.3.4'
+		version: '1.3.5'
 	};
 }();
 
