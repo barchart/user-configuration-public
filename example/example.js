@@ -469,7 +469,8 @@ module.exports = (() => {
       this._started = false;
       this._startPromise = null;
       this._endpoint = endpoint;
-      this._refreshInterval = refreshInterval || null;
+      this._refreshInterval = refreshInterval || 0;
+      this._refreshJitter = Math.floor(this._refreshInterval / 10);
     }
     /**
      * Initializes the connection to the remote server and returns a promise
@@ -524,42 +525,26 @@ module.exports = (() => {
 
     toRequestInterceptor() {
       const scheduler = new Scheduler();
-      let cachePromise = null;
-      let cacheDisposable = null;
+      let refreshPromise = null;
+      let refreshTime = null;
 
       const refreshToken = () => {
-        const refreshPromise = scheduler.backoff(() => this.readToken(), 750, 'Read JWT token', 3).then(token => {
-          if (this._refreshInterval) {
-            cachePromise = refreshPromise;
+        if (refreshPromise === null || this._refreshInterval > 0 && refreshTime !== null && getTime() > refreshTime + this._refreshInterval + this._refreshJitter) {
+          refreshPromise = scheduler.backoff(() => this.readToken(), 750, 'Read JWT token', 3).then(token => {
+            refreshTime = getTime();
+            return token;
+          }).catch(e => {
+            refreshPromise = null;
+            refreshTime = null;
+            return Promise.reject(e);
+          });
+        }
 
-            if (cacheDisposable === null) {
-              cacheDisposable = scheduler.repeat(() => refreshToken(), this._refreshInterval, 'Refresh JWT token');
-            }
-          }
-
-          return token;
-        }).catch(e => {
-          if (cacheDisposable !== null) {
-            cacheDisposable.dispose();
-            cacheDisposable = null;
-            cachePromise = null;
-          }
-
-          return Promise.reject(e);
-        });
         return refreshPromise;
       };
 
       const delegate = (options, endpoint) => {
-        let tokenPromise;
-
-        if (cachePromise !== null) {
-          tokenPromise = cachePromise;
-        } else {
-          tokenPromise = refreshToken();
-        }
-
-        return tokenPromise.then(token => {
+        return refreshToken().then(token => {
           options.headers = options.headers || {};
           options.headers.Authorization = `Bearer ${token}`;
           return options;
@@ -638,6 +623,10 @@ module.exports = (() => {
     }
   }
 
+  function getTime() {
+    return new Date().getTime();
+  }
+
   return JwtGateway;
 })();
 
@@ -654,7 +643,7 @@ module.exports = (() => {
     JwtEndpoint: JwtEndpoint,
     JwtGateway: JwtGateway,
     UserConfigurationGateway: UserConfigurationGateway,
-    version: '1.3.8'
+    version: '1.3.9'
   };
 })();
 
