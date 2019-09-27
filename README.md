@@ -7,17 +7,14 @@ The code is documented with [JSDoc](http://usejsdoc.org/). While the output hasn
 
     > npm install
     > gulp document
-    
 
 ## Development
 
 Gulp is used to check "linting" and to run unit tests.
 
-    > nvm use 6.11.1
     > npm install
     > gulp lint
     > gulp test
-    
 
 ## Build
 
