@@ -1,10 +1,7 @@
 const version = require('./../../lib/index').version;
 
-const JwtEndpoint = require('./../../lib/gateway/jwt/JwtEndpoint');
+const JwtGateway = require('./../../lib/gateway/jwt/JwtGateway');
 const UserConfigurationGateway = require('./../../lib/gateway/UserConfigurationGateway');
-
-const Gateway = require('@barchart/common-js/api/http/Gateway');
-const RequestInterceptor = require('@barchart/common-js/api/http/interceptors/RequestInterceptor');
 
 module.exports = (() => {
 	'use strict';
@@ -50,20 +47,7 @@ module.exports = (() => {
 
 			that.connecting(true);
 
-			const jwtEndpoint = JwtEndpoint.forDevelopment(that.user());
-			const jwtPromise = Gateway.invoke(jwtEndpoint);
-
-			const jwtInterceptor = RequestInterceptor.fromDelegate((options, endpoint) => {
-				return jwtPromise
-					.then((token) => {
-						options.headers = options.headers || { };
-						options.headers.Authorization = `Bearer ${token}`;
-
-						return options;
-					});
-			});
-
-			UserConfigurationGateway.forDevelopment(jwtInterceptor)
+			UserConfigurationGateway.forDevelopment(JwtGateway.forDevelopmentClient(that.user()))
 				.then((gateway) => {
 					that.gateway = gateway;
 
