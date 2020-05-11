@@ -1,23 +1,26 @@
 # @barchart/user-configuration-client-js
-## JavaScript library for interfacing with Barchart's User Configuration System
 
-## Documentation
+[![AWS CodeBuild](https://codebuild.us-east-1.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoicisyc2F1SERKVlFRTEdmTk95cDBtZkdDTjdqVU93MlBHcjhJUkxlVk5DajdFNzhoeStxUWM1NjUvMWpKNTI0UjBHWTFka3lVck01K2FvV2RpYjJzSlJVPSIsIml2UGFyYW1ldGVyU3BlYyI6InY0dmNKZVBkWlFXUFFld0IiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master)](https://github.com/barchart/user-configuration-client-js)
 
-The code is documented with [JSDoc](http://usejsdoc.org/). While the output hasn't been committed to source control, you can generate the documentation by using the following commands:
+A JavaScript SDK for Barchart's User Configuration System.
 
-    > npm install
-    > gulp document
+### Development
 
-## Development
+#### Documentation
 
-Gulp is used to check "linting" and to run unit tests.
+The code is documented with [JSDoc](http://usejsdoc.org/). This will be used as the basis for formal documentation (coming soon).
 
-    > npm install
-    > gulp lint
-    > gulp test
+#### Package Managers
 
-## Build
+This library has been published as a *private* module to NPM as [@barchart/user-configuration-client-js](https://www.npmjs.com/package/@barchart/user-configuration-client-js).
 
-Polyfills for ES6 are required:
+```shell
+npm login
+npm install @barchart/user-configuration-client-js -S
+```
 
-* Promise
+#### Build
+
+Modern JavaScript language features are used. Some browsers may still require polyfills.
+
+
