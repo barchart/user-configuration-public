@@ -21,7 +21,7 @@
     "API"
   ],
   "dependencies": {
-    "@barchart/common-js": "~3.3.0"
+	"@barchart/common-js": "^3.5.1"
   },
   "devDependencies": {
     "@babel/core": "^7.6.2",
