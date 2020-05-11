@@ -5,7 +5,6 @@ const fs = require('fs');
 const browserify = require('browserify'),
 	buffer = require('vinyl-buffer'),
 	bump = require('gulp-bump'),
-	exec = require('child_process').exec,
 	git = require('gulp-git'),
 	gitStatus = require('git-get-status'),
 	glob = require('glob'),
@@ -40,15 +39,6 @@ gulp.task('embed-version', () => {
 	return gulp.src(['./lib/index.js'])
 		.pipe(replace(/(version:\s*')([0-9]+\.[0-9]+\.[0-9]+)(')/g, '$1' + version + '$3'))
 		.pipe(gulp.dest('./lib/'));
-});
-
-gulp.task('document', (cb) => {
-	exec('jsdoc . -c jsdoc.json -r -d docs', (error, stdout, stderr) => {
-		console.log(stdout);
-		console.log(stderr);
-
-		cb();
-	});
 });
 
 gulp.task('commit-changes', () => {
@@ -108,7 +98,6 @@ gulp.task('execute-tests', gulp.series(
 gulp.task('release', gulp.series(
 	'ensure-clean-working-directory',
 	'execute-tests',
-	'document',
 	'bump-version',
 	'embed-version',
 	'build-example-bundle',
@@ -118,7 +107,7 @@ gulp.task('release', gulp.series(
 ));
 
 gulp.task('lint', () => {
-	return gulp.src([ './**/*.js', './test/specs/**/*.js', '!./node_modules/**', '!./docs/**', '!./test/SpecRunner.js', '!./example/**' ])
+	return gulp.src([ './**/*.js', './test/specs/**/*.js', '!./node_modules/**', '!./test/SpecRunner.js', '!./example/**' ])
 		.pipe(jshint({'esversion': 6}))
 		.pipe(jshint.reporter('default'));
 });
