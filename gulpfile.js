@@ -10,6 +10,7 @@ const browserify = require('browserify'),
 	glob = require('glob'),
 	jasmine = require('gulp-jasmine'),
 	jshint = require('gulp-jshint'),
+	merge = require('merge-stream'),
 	replace = require('gulp-replace'),
 	source = require('vinyl-source-stream');
 
@@ -36,9 +37,15 @@ gulp.task('bump-version', () => {
 gulp.task('embed-version', () => {
 	const version = getVersionFromPackage();
 
-	return gulp.src(['./lib/index.js'])
+	const meta = gulp.src(['./lib/index.js'])
 		.pipe(replace(/(version:\s*')([0-9]+\.[0-9]+\.[0-9]+)(')/g, '$1' + version + '$3'))
 		.pipe(gulp.dest('./lib/'));
+
+	const coverpage = gulp.src(['./docs/_coverpage.md'])
+		.pipe(replace(/[0-9]+\.[0-9]+\.[0-9]+/g, version))
+		.pipe(gulp.dest('./docs/'));
+
+	return merge(meta, coverpage);
 });
 
 gulp.task('commit-changes', () => {
