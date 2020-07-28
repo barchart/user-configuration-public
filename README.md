@@ -2,25 +2,25 @@
 
 [![AWS CodeBuild](https://codebuild.us-east-1.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoicisyc2F1SERKVlFRTEdmTk95cDBtZkdDTjdqVU93MlBHcjhJUkxlVk5DajdFNzhoeStxUWM1NjUvMWpKNTI0UjBHWTFka3lVck01K2FvV2RpYjJzSlJVPSIsIml2UGFyYW1ldGVyU3BlYyI6InY0dmNKZVBkWlFXUFFld0IiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master)](https://github.com/barchart/user-configuration-client-js)
 
-A JavaScript SDK for Barchart's User Configuration System.
+This **JavaScript SDK** connects your applications to the _Barchart User Preference Service_ — a simple tool for saving and retrieving ad hoc user preference data.
 
-### Development
+Also, the User Preference Service provides **simple REST API**, if you prefer to access the service directly (bypassing this SDK).
 
-#### Documentation
+### Documentation
 
-The code is documented with [JSDoc](http://usejsdoc.org/). This will be used as the basis for formal documentation (coming soon).
+Complete documentation can be found here:
 
-#### Package Managers
+http://barchart.github.io/user-configuration-client-js/
 
-This library has been published as a *private* module to NPM as [@barchart/user-configuration-client-js](https://www.npmjs.com/package/@barchart/user-configuration-client-js).
+### Package Managers
 
-```shell
-npm login
-npm install @barchart/user-configuration-client-js -S
+This library has been published as a *public* package to NPM as [@barchart/user-configuration-client-js](https://www.npmjs.com/package/@barchart/user-configuration-client-js).
+
+ ```sh
+ npm install @barchart/user-configuration-client-js -S
 ```
 
-#### Build
+### Build
 
-Modern JavaScript language features are used. Some browsers may still require polyfills.
-
+Source code is written in [ES2018](https://en.wikipedia.org/wiki/ECMAScript#9th_Edition_%E2%80%93_ECMAScript_2018). Consequently, transpilation (or polyfill use) is recommended for use in web browsers.
 
