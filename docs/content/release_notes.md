@@ -1,16 +1,13 @@
 # Release Notes
 
-## 0.0.1
-Minor bug fixes:
+## 2.0.0
+**Initial Public Release**
 
-* Stuff fixed
-* Other stuff fixed too
+**Breaking Changes**
 
-## 0.0.0
-**Your First Release**
-
-Features Include:
-
-* Some stuff
-* Some other stuff
-* Yet more stuff
+* The mechanism for passing JSON Web Tokens to the ```UserConfigurationGateway``` has changed. Consumers are now required to provide ```JwtProvider``` instances instead of a ```RequestInterceptor``` instances. Here are the specifics:
+  * The ```RequestInterceptor``` argument was replaced with a ```JwtProvider``` argument on static factory functions (e.g. ```UserConfigurationGateway.forProduction```).
+  * The ```RequestInterceptor``` argument was removed from the ```UserConfigurationGateway``` constructor.
+  * The ```UserConfigurationGateway.start``` function was renamed to ```UserConfigurationGateway.connect``` and now has a ```JwtProvider``` argument.
+  * The ```JwtGateway``` and ```JwtEndpoint``` classes were removed.
+  * Static factory functions for impersonating users in the ```test``` and ```development``` environments were added. See ```JwtProvider.forTest``` and ```JwtProvider.forDevelopment```.

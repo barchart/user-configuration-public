@@ -6,5 +6,6 @@
 <!-- api_open -->
 <!-- api_close -->
 <!-- sdk_open -->
+* [SDK Reference](/content/sdk_reference)
 <!-- sdk_close -->
 * [Release Notes](/content/release_notes)
