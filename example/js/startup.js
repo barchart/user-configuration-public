@@ -1,7 +1,7 @@
 const version = require('./../../lib/index').version;
 
-const JwtGateway = require('./../../lib/gateway/jwt/JwtGateway');
-const UserConfigurationGateway = require('./../../lib/gateway/UserConfigurationGateway');
+const JwtProvider = require('./../../lib/security/JwtProvider'),
+	UserConfigurationGateway = require('./../../lib/gateway/UserConfigurationGateway');
 
 module.exports = (() => {
 	'use strict';
@@ -47,7 +47,7 @@ module.exports = (() => {
 
 			that.connecting(true);
 
-			UserConfigurationGateway.forDevelopment(JwtGateway.forDevelopmentClient(that.user()))
+			UserConfigurationGateway.forDevelopment(JwtProvider.forTest(that.user(), 'TGAM'))
 				.then((gateway) => {
 					that.gateway = gateway;
 
