@@ -9,6 +9,6 @@
 * [SDK Reference](/content/sdk_reference)
 	* [lib/data](/content/sdk/lib-data)
 	* [lib/gateway](/content/sdk/lib-gateway)
-	* [lib/gateway/jwt](/content/sdk/lib-gateway-jwt)
+	* [lib/security](/content/sdk/lib-security)
 <!-- sdk_close -->
 * [Release Notes](/content/release_notes)
