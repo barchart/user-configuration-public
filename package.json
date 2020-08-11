@@ -1,6 +1,6 @@
 {
   "name": "@barchart/user-configuration-client-js",
-  "version": "1.4.2",
+  "version": "1.4.1",
   "description": "JavaScript SDK for Barchart's User Preference Service",
   "author": {
     "name": "Bryan Ingle",
@@ -35,6 +35,7 @@
     "gulp-git": "^2.9.0",
     "gulp-jasmine": "^2.2.1",
     "gulp-jshint": "~2.1.0",
+    "gulp-prompt": "^1.2.0",
     "gulp-replace": "^0.5.4",
     "jshint": "2.9.5",
     "merge-stream": "^2.0.0",
