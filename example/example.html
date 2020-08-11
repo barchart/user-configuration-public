@@ -3,27 +3,35 @@
 <head>
     <meta charset="utf-8"/>
 
-    <title>Barchart User Configuration Client API</title>
+    <title>Barchart User Preference SDK Example</title>
 
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
-    <link rel="stylesheet" href="example.css" type="text/css">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" type="text/css">
+	<link rel="stylesheet" href="example.css" type="text/css">
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.23.0/polyfill.min.js"></script>
+	<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.0.0/lodash.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 
-    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-
-    <script src="example.js"></script>
+	<script src="example.js"></script>
 
     <script type="text/html" id="disconnected-template">
         <div class="container-center-outer">
             <div class="container-center-inner">
                 <form class="form-horizontal login">
+					<div class="form-group" data-bind="css: { 'has-error': environment().length === 0 }, event: { keypress: handleLoginKeypress }">
+						<label class="pull-left">Host</label>
+						<input class="form-control" data-bind="textInput: environment" type="text" placeholder="Environment">
+					</div>
+					<div class="form-group" data-bind="css: { 'has-error': context().length === 0 }, event: { keypress: handleLoginKeypress }">
+						<label class="pull-left">Context ID</label>
+						<input class="form-control" data-bind="textInput: context" type="text" placeholder="Context">
+					</div>
                     <div class="form-group" data-bind="css: { 'has-error': user().length === 0 }, event: { keypress: handleLoginKeypress }">
-                        <label class="pull-left">User</label>
+                        <label class="pull-left">User ID</label>
                         <input class="form-control" data-bind="textInput: user" type="text" placeholder="User">
                     </div>
                     <div class="form-group buttons">
@@ -36,14 +44,13 @@
 
     <script type="text/html" id="header-template">
         <div class="pull-left">
-            <h4 class="pull-left">Barchart User Configuration API <span data-bind="visible: connected"> -- <span data-bind="text: user"></span></span></h4>
-        </div>
-
-        <div class="pull-right">
-            <div class="header-action-buttons pull-right form-inline" data-bind="visible: connected() === true && loaded() === true">
-                <span class="text-button glyphicon glyphicon-remove" data-bind="click: disconnect"></span>
-            </div>
-        </div>
+			<h4 class="pull-left header-text barchart-logo"><span>[User Preferences SDK Example]</span></h4>
+		</div>
+		<div class="pull-right">
+			<div class="header-action-buttons pull-right" data-bind="visible: connected() === true && loaded() === true">
+				<span class="text-button glyphicon glyphicon-remove" data-bind="click: disconnect"></span>
+			</div>
+		</div>
     </script>
 
     <script type="text/html" id="console-template">
@@ -53,15 +60,27 @@
     </script>
 
     <script type="text/html" id="footer-template">
-        <h4 class="pull-left" data-bind="visible: connected">
-        </h4>
-        <h4 class="pull-right">Client Version: <span data-bind="text: clientVersion"></span></h4>
+		<h4 class="pull-left">
+			<span data-bind="visible: connected">
+				<span data-bind="text: userDescription"></span>
+				<span>::</span>
+				<span data-bind="text: environmentDescription"></span>
+			</span>
+		</h4>
+		<h4 class="pull-right">
+			<span data-bind="visible: connected">
+				<span><a href="https://barchart.github.io/alerts-client-js/#/content/sdk_reference" target="_blank" style="color: white;">sdk version <span data-bind="text: version().sdk"></span></a></span>
+				<span>::</span>
+				<span><a href="https://barchart.github.io/alerts-client-js/#/content/api_reference" target="_blank" style="color: white;">api version <span data-bind="text: version().api"></span></a></span>
+			</span>
+		</h4>
     </script>
 </head>
 <body>
 <div class="header" data-bind="template: { name: 'header-template' }"></div>
 <div class="main" data-bind="template: { name: activeTemplate }"></div>
 <div class="footer" data-bind="template: { name: 'footer-template' }">
+
 </div>
 </body>
 </html>

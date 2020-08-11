@@ -11,24 +11,30 @@ module.exports = (() => {
 
 		that.gateway = null;
 
-		that.user = ko.observable('113692067');
-		that.data = ko.observable(null);
-
 		that.connected = ko.observable(false);
 		that.connecting = ko.observable(false);
 
-		that.loaded = ko.computed(function() {
-			return that.data() !== null;
-		});
+		that.context = ko.observable('barchart');
+
+		that.user = ko.observable('113692067');
+		that.userDescription = ko.observable(null);
+
+		that.environment = ko.observable('test');
+		that.environmentDescription = ko.observable(null);
+
+		that.preferences = ko.observable(null);
 
 		that.console = ko.observableArray([ ]);
-
-		that.clientVersion = ko.observable();
+		that.version = ko.observable({ });
 
 		that.activeTemplate = ko.observable('disconnected-template');
 
+		that.loaded = ko.computed(function() {
+			return that.preferences() !== null;
+		});
+
 		that.canConnect = ko.computed(function() {
-			return !that.connecting() && !that.connected();
+			return !that.connecting() && !that.connected() && (that.environment().toLowerCase() === 'dev' || that.environment().toLowerCase() === 'test');
 		});
 		that.canDisconnect = ko.computed(function() {
 			return that.connected();
@@ -47,29 +53,47 @@ module.exports = (() => {
 
 			that.connecting(true);
 
-			UserConfigurationGateway.forDevelopment(JwtProvider.forTest(that.user(), 'TGAM'))
-				.then((gateway) => {
-					that.gateway = gateway;
+			let gatewayPromise;
 
-					that.connecting(false);
+			if (that.environment().toLowerCase() === 'dev') {
+				gatewayPromise = UserConfigurationGateway.forDevelopment(JwtProvider.forDevelopment(that.user(), that.context()));
+			} else if (that.environment().toLowerCase() === 'test') {
+				gatewayPromise = UserConfigurationGateway.forTest(JwtProvider.forTest(that.user(), that.context()));
+			} else {
+				gatewayPromise = Promise.reject();
+			}
+
+			gatewayPromise.then((gateway) => {
+				that.gateway = gateway;
+
+				return gateway.readServiceMetadata()
+					.then((data) => {
+						that.version({ sdk: version, api: data.server.semver});
+
+						that.userDescription(data.user.id + '@' + data.context.id);
+						that.environmentDescription(that.gateway.environment);
+
+						that.activeTemplate('console-template');
+
+						return true;
+					});
+			}).catch((e) => {
+				console.log(e);
+
+				writeConsoleObject(e);
+
+				return false;
+			}).then((started) => {
+				that.connecting(false);
+
+				if (started) {
 					that.connected(true);
 
-					that.clientVersion(version);
-
-					that.activeTemplate('console-template');
-
-					return true;
-				}).catch((e) => {
-					console.log(e);
-
-					writeConsoleObject(e);
-
-					return false;
-				}).then((started) => {
-					if (started) {
-						return that.readConfiguration(false);
-					}
-				});
+					return that.readConfiguration(false);
+				} else {
+					that.disconnect();
+				}
+			});
 		};
 		that.disconnect = function() {
 			if (that.gateway === null) {
@@ -83,7 +107,12 @@ module.exports = (() => {
 
 			that.console.removeAll();
 
-			that.data(null);
+			that.preferences(null);
+
+			that.environmentDescription(null);
+			that.userDescription(null);
+
+			//that.version({ });
 
 			that.connecting(false);
 			that.connected(false);
@@ -103,12 +132,12 @@ module.exports = (() => {
 					writeConsoleText(action);
 					writeConsoleObject(data);
 
-					that.data(data);
+					that.preferences(data);
 				}).catch((e) => {
 					writeConsoleText(action);
 					writeConsoleText(e);
 
-					that.data(null);
+					that.preferences(null);
 				});
 		};
 

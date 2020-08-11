@@ -1,9 +1,8 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 const version = require('./../../lib/index').version;
 
-const JwtGateway = require('./../../lib/gateway/jwt/JwtGateway');
-
-const UserConfigurationGateway = require('./../../lib/gateway/UserConfigurationGateway');
+const JwtProvider = require('./../../lib/security/JwtProvider'),
+      UserConfigurationGateway = require('./../../lib/gateway/UserConfigurationGateway');
 
 module.exports = (() => {
   'use strict';
@@ -11,18 +10,22 @@ module.exports = (() => {
   var PageModel = function () {
     var that = this;
     that.gateway = null;
-    that.user = ko.observable('113692067');
-    that.data = ko.observable(null);
     that.connected = ko.observable(false);
     that.connecting = ko.observable(false);
-    that.loaded = ko.computed(function () {
-      return that.data() !== null;
-    });
+    that.context = ko.observable('barchart');
+    that.user = ko.observable('113692067');
+    that.userDescription = ko.observable(null);
+    that.environment = ko.observable('test');
+    that.environmentDescription = ko.observable(null);
+    that.preferences = ko.observable(null);
     that.console = ko.observableArray([]);
-    that.clientVersion = ko.observable();
+    that.version = ko.observable({});
     that.activeTemplate = ko.observable('disconnected-template');
+    that.loaded = ko.computed(function () {
+      return that.preferences() !== null;
+    });
     that.canConnect = ko.computed(function () {
-      return !that.connecting() && !that.connected();
+      return !that.connecting() && !that.connected() && (that.environment().toLowerCase() === 'dev' || that.environment().toLowerCase() === 'test');
     });
     that.canDisconnect = ko.computed(function () {
       return that.connected();
@@ -39,20 +42,40 @@ module.exports = (() => {
     that.connect = function () {
       that.disconnect();
       that.connecting(true);
-      UserConfigurationGateway.forDevelopment(JwtGateway.forDevelopmentClient(that.user())).then(gateway => {
+      let gatewayPromise;
+
+      if (that.environment().toLowerCase() === 'dev') {
+        gatewayPromise = UserConfigurationGateway.forDevelopment(JwtProvider.forDevelopment(that.user(), that.context()));
+      } else if (that.environment().toLowerCase() === 'test') {
+        gatewayPromise = UserConfigurationGateway.forTest(JwtProvider.forTest(that.user(), that.context()));
+      } else {
+        gatewayPromise = Promise.reject();
+      }
+
+      gatewayPromise.then(gateway => {
         that.gateway = gateway;
-        that.connecting(false);
-        that.connected(true);
-        that.clientVersion(version);
-        that.activeTemplate('console-template');
-        return true;
+        return gateway.readServiceMetadata().then(data => {
+          that.version({
+            sdk: version,
+            api: data.server.semver
+          });
+          that.userDescription(data.user.id + '@' + data.context.id);
+          that.environmentDescription(that.gateway.environment);
+          that.activeTemplate('console-template');
+          return true;
+        });
       }).catch(e => {
         console.log(e);
         writeConsoleObject(e);
         return false;
       }).then(started => {
+        that.connecting(false);
+
         if (started) {
+          that.connected(true);
           return that.readConfiguration(false);
+        } else {
+          that.disconnect();
         }
       });
     };
@@ -68,7 +91,10 @@ module.exports = (() => {
       }
 
       that.console.removeAll();
-      that.data(null);
+      that.preferences(null);
+      that.environmentDescription(null);
+      that.userDescription(null); //that.version({ });
+
       that.connecting(false);
       that.connected(false);
       that.activeTemplate('disconnected-template');
@@ -83,11 +109,11 @@ module.exports = (() => {
       return that.gateway.readConfiguration().then(function (data) {
         writeConsoleText(action);
         writeConsoleObject(data);
-        that.data(data);
+        that.preferences(data);
       }).catch(e => {
         writeConsoleText(action);
         writeConsoleText(e);
-        that.data(null);
+        that.preferences(null);
       });
     };
 
@@ -108,19 +134,20 @@ module.exports = (() => {
   });
 })();
 
-},{"./../../lib/gateway/UserConfigurationGateway":3,"./../../lib/gateway/jwt/JwtGateway":5,"./../../lib/index":6}],2:[function(require,module,exports){
+},{"./../../lib/gateway/UserConfigurationGateway":3,"./../../lib/index":4,"./../../lib/security/JwtProvider":5}],2:[function(require,module,exports){
 module.exports = (() => {
   'use strict';
   /**
    * Static configuration data.
    *
    * @public
+   * @ignore
    */
 
   class Configuration {
     constructor() {}
     /**
-     * The host of the development system.
+     * The hostname of the REST API for the development environment (intended for Barchart use only).
      *
      * @public
      * @static
@@ -132,7 +159,19 @@ module.exports = (() => {
       return 'user-configuration-dev.aws.barchart.com';
     }
     /**
-     * The host of the staging system.
+     * The hostname of the REST API for the test environment (public use allowed).
+     *
+     * @public
+     * @static
+     * @returns {String}
+     */
+
+
+    static get testHost() {
+      return 'user-configuration-test.aws.barchart.com';
+    }
+    /**
+     * The hostname of the REST API for the staging environment (public use allowed).
      *
      * @public
      * @static
@@ -144,7 +183,7 @@ module.exports = (() => {
       return 'user-configuration-stage.aws.barchart.com';
     }
     /**
-     * The host of the demo system.
+     * The hostname of the REST API for the demo environment (intended for Barchart use only).
      *
      * @public
      * @static
@@ -156,7 +195,7 @@ module.exports = (() => {
       return 'user-configuration-demo.aws.barchart.com';
     }
     /**
-     * The host of the production system.
+     * The hostname of the REST API for the production environment (public use allowed).
      *
      * @public
      * @static
@@ -166,6 +205,19 @@ module.exports = (() => {
 
     static get productionHost() {
       return 'user-configuration.aws.barchart.com';
+    }
+    /**
+     * The hostname of REST API which generates impersonation tokens for non-secure
+     * test and demo environments.
+     *
+     * @public
+     * @static
+     * @returns {string}
+     */
+
+
+    static get getJwtImpersonationHost() {
+      return 'jwt-public-prod.aws.barchart.com';
     }
 
     toString() {
@@ -190,55 +242,87 @@ const EndpointBuilder = require('@barchart/common-js/api/http/builders/EndpointB
       ResponseInterceptor = require('@barchart/common-js/api/http/interceptors/ResponseInterceptor'),
       VerbType = require('@barchart/common-js/api/http/definitions/VerbType');
 
-const Configuration = require('./../common/Configuration');
+const Configuration = require('./../common/Configuration'),
+      JwtProvider = require('../security/JwtProvider');
 
 module.exports = (() => {
   'use strict';
+
+  const REST_API_SECURE_PROTOCOL = 'https';
+  const REST_API_SECURE_PORT = 443;
   /**
-   * Web service gateway for invoking user configuration data storage service.
+   * The **central component of the SDK**. It is responsible for connecting to Barchart's
+   * User Preference Service.
    *
    * @public
-   * @param {String} protocol - The protocol to use (either HTTP or HTTPS).
-   * @param {String} host - The host name of the Watchlist web service.
-   * @param {Number} port - The TCP port number of the Watchlist web service.
-   * @param {RequestInterceptor=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
+   * @param {String} protocol - The protocol of the of the User Preference web service (either HTTP or HTTPS).
+   * @param {String} host - The hostname of the User Preference web service.
+   * @param {Number} port - The TCP port number of the User Preference web service.
+   * @param {String} environment - A description of the environment we're connecting to.
    * @extends {Disposable}
    */
 
   class UserConfigurationGateway extends Disposable {
-    constructor(protocol, host, port, requestInterceptor) {
+    constructor(protocol, host, port, environment) {
       super();
+      this._environment = environment;
       this._started = false;
       this._startPromise = null;
+      this._jwtProvider = null;
+      const requestInterceptor = RequestInterceptor.fromDelegate((options, endpoint) => {
+        return Promise.resolve().then(() => {
+          return this._jwtProvider.getToken().then(token => {
+            options.headers = options.headers || {};
+            options.headers.Authorization = `Bearer ${token}`;
+            return options;
+          });
+        }).catch(e => {
+          const failure = FailureReason.forRequest({
+            endpoint: endpoint
+          }).addItem(FailureType.REQUEST_IDENTITY_FAILURE).format();
+          return Promise.reject(failure);
+        });
+      });
       const protocolType = Enum.fromCode(ProtocolType, protocol.toUpperCase());
-      let requestInterceptorToUse;
-
-      if (requestInterceptor) {
-        requestInterceptorToUse = requestInterceptor;
-      } else {
-        requestInterceptorToUse = RequestInterceptor.EMPTY;
-      }
-
-      this._readConfigurationEndpoint = EndpointBuilder.for('read-user', 'read your preferences').withVerb(VerbType.GET).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(pb => pb.withLiteralParameter('version', 'v1').withLiteralParameter('user', 'user')).withRequestInterceptor(requestInterceptorToUse).withResponseInterceptor(ResponseInterceptor.DATA).withErrorInterceptor(ErrorInterceptor.GENERAL).endpoint;
-      this._writeConfigurationEndpoint = EndpointBuilder.for('write-user', 'save your preferences').withVerb(VerbType.PUT).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(pb => pb.withLiteralParameter('version', 'v1').withLiteralParameter('user', 'user')).withBody('user preference data').withRequestInterceptor(requestInterceptorToUse).withErrorInterceptor(ErrorInterceptor.GENERAL).endpoint;
+      this._readConfigurationEndpoint = EndpointBuilder.for('read-user-preferences', 'read your preferences').withVerb(VerbType.GET).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(pb => pb.withLiteralParameter('version', 'v1').withLiteralParameter('user', 'user')).withRequestInterceptor(requestInterceptor).withResponseInterceptor(ResponseInterceptor.DATA).withErrorInterceptor(ErrorInterceptor.GENERAL).endpoint;
+      this._writeConfigurationEndpoint = EndpointBuilder.for('write-user-preferences', 'save your preferences').withVerb(VerbType.PUT).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(pb => pb.withLiteralParameter('version', 'v1').withLiteralParameter('user', 'user')).withBody('user preference data').withRequestInterceptor(requestInterceptor).withErrorInterceptor(ErrorInterceptor.GENERAL).endpoint;
+      this._metadataReadEndpoint = EndpointBuilder.for('read-service-metadata', 'check version of user preference service').withVerb(VerbType.GET).withProtocol(protocolType).withHost(host).withPort(port).withPathBuilder(pb => pb.withLiteralParameter('version', 'v1').withLiteralParameter('service', 'service')).withRequestInterceptor(requestInterceptor).withResponseInterceptor(ResponseInterceptor.DATA).withErrorInterceptor(ErrorInterceptor.GENERAL).endpoint;
     }
     /**
-     * Initializes the connection to the remote server and returns a promise
-     * containing the current instance.
+     * A description of the environment (e.g. development, production, etc).
      *
      * @public
+     * @return {String}
+     */
+
+
+    get environment() {
+      return this._environment;
+    }
+    /**
+     * Attempts to establish a connection to the backend. This function should be invoked
+     * immediately following instantiation. Once the resulting promise resolves, a
+     * connection has been established and other instance methods can be used.
+     *
+     * @public
+     * @param {JwtProvider} jwtProvider
      * @returns {Promise<UserConfigurationGateway>}
      */
 
 
-    start() {
+    connect(jwtProvider) {
       return Promise.resolve().then(() => {
+        assert.argumentIsRequired(jwtProvider, 'jwtProvider', JwtProvider, 'JwtProvider');
+
         if (this._startPromise === null) {
           this._startPromise = Promise.resolve().then(() => {
             this._started = true;
+            this._jwtProvider = jwtProvider;
             return this;
           }).catch(e => {
+            this._started = false;
             this._startPromise = null;
+            this._jwtProvider = null;
             throw e;
           });
         }
@@ -247,10 +331,10 @@ module.exports = (() => {
       });
     }
     /**
-     * Retrieves user configuration data from the remote server.
+     * Retrieves user preferences from the remote service (for the current user).
      *
      * @public
-     * @returns {Promise<Object>}
+     * @returns {Promise<Schema.UserConfiguration>}
      */
 
 
@@ -261,11 +345,11 @@ module.exports = (() => {
       });
     }
     /**
-     * Instructs the remote server to save user configuration data.
+     * Saves user preferences data to the remote service  (for the current user).
      *
      * @public
-     * @param {Object} data
-     * @returns {Promise}
+     * @param {Schema.UserConfiguration} data
+     * @returns {Promise<Schema.UserConfiguration>}
      */
 
 
@@ -277,67 +361,97 @@ module.exports = (() => {
       });
     }
     /**
-     * Creates and starts a new {@link UserConfigurationGateway} for use in the development environment.
+     * Retrieves information regarding the remote service (e.g. version number, current user identifier, etc).
      *
      * @public
-     * @static
-     * @param {RequestInterceptor=|Promise<RequestInterceptor>=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
-     * @returns {Promise<UserConfigurationGateway>}
+     * @returns {Promise<Schema.UserConfigurationServiceMetadata>}
      */
 
 
-    static forDevelopment(requestInterceptor) {
-      return Promise.resolve(requestInterceptor).then(requestInterceptor => {
-        assert.argumentIsOptional(requestInterceptor, 'requestInterceptor', RequestInterceptor, 'RequestInterceptor');
-        return start(new UserConfigurationGateway('https', Configuration.developmentHost, 443, requestInterceptor));
+    readServiceMetadata() {
+      return Promise.resolve().then(() => {
+        checkStart.call(this);
+        return Gateway.invoke(this._metadataReadEndpoint);
       });
     }
     /**
-     * Creates and starts a new {@link UserConfigurationGateway} for use in the staging environment.
+     * Creates and starts a new {@link UserConfigurationGateway} for use in the public test environment.
      *
      * @public
      * @static
-     * @param {RequestInterceptor=|Promise<RequestInterceptor>=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
+     * @param {JwtProvider} jwtProvider
      * @returns {Promise<UserConfigurationGateway>}
      */
 
 
-    static forStaging(requestInterceptor) {
-      return Promise.resolve(requestInterceptor).then(requestInterceptor => {
-        assert.argumentIsOptional(requestInterceptor, 'requestInterceptor', RequestInterceptor, 'RequestInterceptor');
-        return start(new UserConfigurationGateway('https', Configuration.stagingHost, 443, requestInterceptor));
+    static forTest(jwtProvider) {
+      return Promise.resolve().then(() => {
+        assert.argumentIsRequired(jwtProvider, 'jwtProvider', JwtProvider, 'JwtProvider');
+        return start(new UserConfigurationGateway(REST_API_SECURE_PROTOCOL, Configuration.testHost, REST_API_SECURE_PORT, 'test'), jwtProvider);
       });
     }
     /**
-     * Creates and starts a new {@link UserConfigurationGateway} for use in the demo environment.
+     * Creates and starts a new {@link UserConfigurationGateway} for use in the private development environment.
      *
      * @public
      * @static
-     * @param {RequestInterceptor=|Promise<RequestInterceptor>=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
+     * @param {JwtProvider} jwtProvider
      * @returns {Promise<UserConfigurationGateway>}
      */
 
 
-    static forDemo(requestInterceptor) {
-      return Promise.resolve(requestInterceptor).then(requestInterceptor => {
-        assert.argumentIsOptional(requestInterceptor, 'requestInterceptor', RequestInterceptor, 'RequestInterceptor');
-        return start(new UserConfigurationGateway('https', Configuration.demoHost, 443, requestInterceptor));
+    static forDevelopment(jwtProvider) {
+      return Promise.resolve().then(() => {
+        assert.argumentIsRequired(jwtProvider, 'jwtProvider', JwtProvider, 'JwtProvider');
+        return start(new UserConfigurationGateway(REST_API_SECURE_PROTOCOL, Configuration.developmentHost, REST_API_SECURE_PORT, 'development'), jwtProvider);
       });
     }
     /**
-     * Creates and starts a new {@link UserConfigurationGateway} for use in the production environment.
+     * Creates and starts a new {@link UserConfigurationGateway} for use in the private staging environment.
      *
      * @public
      * @static
-     * @param {RequestInterceptor=|Promise<RequestInterceptor>=} requestInterceptor - A request interceptor used with each request (typically used to inject JWT tokens).
+     * @param {JwtProvider} jwtProvider
      * @returns {Promise<UserConfigurationGateway>}
      */
 
 
-    static forProduction(requestInterceptor) {
-      return Promise.resolve(requestInterceptor).then(requestInterceptor => {
-        assert.argumentIsOptional(requestInterceptor, 'requestInterceptor', RequestInterceptor, 'RequestInterceptor');
-        return start(new UserConfigurationGateway('https', Configuration.productionHost, 443, requestInterceptor));
+    static forStaging(jwtProvider) {
+      return Promise.resolve().then(() => {
+        assert.argumentIsRequired(jwtProvider, 'jwtProvider', JwtProvider, 'JwtProvider');
+        return start(new UserConfigurationGateway(REST_API_SECURE_PROTOCOL, Configuration.stagingHost, REST_API_SECURE_PORT, 'staging'), jwtProvider);
+      });
+    }
+    /**
+     * Creates and starts a new {@link UserConfigurationGateway} for use in the private demo environment.
+     *
+     * @public
+     * @static
+     * @param {JwtProvider} jwtProvider
+     * @returns {Promise<UserConfigurationGateway>}
+     */
+
+
+    static forDemo(jwtProvider) {
+      return Promise.resolve().then(() => {
+        assert.argumentIsRequired(jwtProvider, 'jwtProvider', JwtProvider, 'JwtProvider');
+        return start(new UserConfigurationGateway(REST_API_SECURE_PROTOCOL, Configuration.demoHost, REST_API_SECURE_PORT, 'demo'), jwtProvider);
+      });
+    }
+    /**
+     * Creates and starts a new {@link UserConfigurationGateway} for use in the public production environment.
+     *
+     * @public
+     * @static
+     * @param {JwtProvider} jwtProvider
+     * @returns {Promise<UserConfigurationGateway>}
+     */
+
+
+    static forProduction(jwtProvider) {
+      return Promise.resolve().then(() => {
+        assert.argumentIsRequired(jwtProvider, 'jwtProvider', JwtProvider, 'JwtProvider');
+        return start(new UserConfigurationGateway(REST_API_SECURE_PROTOCOL, Configuration.productionHost, REST_API_SECURE_PORT, 'production'), jwtProvider);
       });
     }
 
@@ -351,8 +465,8 @@ module.exports = (() => {
 
   }
 
-  function start(gateway) {
-    return gateway.start().then(() => {
+  function start(gateway, jwtProvider) {
+    return gateway.connect(jwtProvider).then(() => {
       return gateway;
     });
   }
@@ -370,271 +484,146 @@ module.exports = (() => {
   return UserConfigurationGateway;
 })();
 
-},{"./../common/Configuration":2,"@barchart/common-js/api/http/Gateway":10,"@barchart/common-js/api/http/builders/EndpointBuilder":12,"@barchart/common-js/api/http/definitions/ProtocolType":18,"@barchart/common-js/api/http/definitions/VerbType":19,"@barchart/common-js/api/http/interceptors/ErrorInterceptor":23,"@barchart/common-js/api/http/interceptors/RequestInterceptor":24,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":25,"@barchart/common-js/lang/Disposable":34,"@barchart/common-js/lang/Enum":35,"@barchart/common-js/lang/assert":39}],4:[function(require,module,exports){
-const EndpointBuilder = require('@barchart/common-js/api/http/builders/EndpointBuilder'),
-      ProtocolType = require('@barchart/common-js/api/http/definitions/ProtocolType'),
-      ResponseInterceptor = require('@barchart/common-js/api/http/interceptors/ResponseInterceptor'),
-      VerbType = require('@barchart/common-js/api/http/definitions/VerbType');
-
-const Configuration = require('./../../common/Configuration');
-
-module.exports = (() => {
-  'use strict';
-  /**
-   * Static utilities for JWT token generation (used for development purposes only).
-   *
-   * @public
-   */
-
-  class JwtEndpoint {
-    constructor(endpoint, refreshInterval) {}
-    /**
-     * Creates and starts a new {@link JwtEndpoint} for use in the development environment.
-     *
-     * @public
-     * @static
-     * @param {String} user - The identifier of the user to impersonate.
-     * @returns {Promise<Endpoint>}
-     */
-
-
-    static forDevelopment(user) {
-      return EndpointBuilder.for('read-jwt-token-for-development', 'lookup user identity').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHost(Configuration.developmentHost).withPathBuilder(pb => pb.withLiteralParameter('version', 'v1').withLiteralParameter('token', 'token')).withQueryBuilder(qb => qb.withLiteralParameter('user', 'userId', user)).withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
-    }
-    /**
-     * Creates and starts a new {@link JwtEndpoint} for use in the demo environment.
-     *
-     * @public
-     * @static
-     * @param {String} user - The identifier of the user to impersonate.
-     * @returns {Promise<Endpoint>}
-     */
-
-
-    static forDemo(user) {
-      return EndpointBuilder.for('read-jwt-token-for-demo', 'lookup user identity').withVerb(VerbType.GET).withProtocol(ProtocolType.HTTPS).withHost(Configuration.demoHost).withPathBuilder(pb => pb.withLiteralParameter('version', 'v1').withLiteralParameter('token', 'token')).withQueryBuilder(qb => qb.withLiteralParameter('user', 'userId', user)).withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
-    }
-
-    toString() {
-      return '[JwtEndpoint]';
-    }
-
-  }
-
-  return JwtEndpoint;
-})();
-
-},{"./../../common/Configuration":2,"@barchart/common-js/api/http/builders/EndpointBuilder":12,"@barchart/common-js/api/http/definitions/ProtocolType":18,"@barchart/common-js/api/http/definitions/VerbType":19,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":25}],5:[function(require,module,exports){
-const assert = require('@barchart/common-js/lang/assert'),
-      Disposable = require('@barchart/common-js/lang/Disposable'),
-      Scheduler = require('@barchart/common-js/timing/Scheduler');
-
-const Endpoint = require('@barchart/common-js/api/http/definitions/Endpoint'),
-      FailureReason = require('@barchart/common-js/api/failures/FailureReason'),
-      FailureType = require('@barchart/common-js/api/failures/FailureType'),
-      Gateway = require('@barchart/common-js/api/http/Gateway'),
-      RequestInterceptor = require('@barchart/common-js/api/http/interceptors/RequestInterceptor');
-
-const JwtEndpoint = require('./JwtEndpoint');
-
-module.exports = (() => {
-  'use strict';
-  /**
-   * Web service gateway for obtaining JWT tokens (for development purposes).
-   *
-   * @public
-   * @param {Endpoint} endpoint
-   * @param {Number=} refreshInterval - Interval, in milliseconds, which a token refresh should occur. If zero, the token does not need to be refreshed.
-   * @extends {Disposable}
-   */
-
-  class JwtGateway extends Disposable {
-    constructor(endpoint, refreshInterval) {
-      super();
-      assert.argumentIsRequired(endpoint, 'endpoint', Endpoint, 'Endpoint');
-      assert.argumentIsOptional(refreshInterval, 'refreshInterval', Number);
-      this._started = false;
-      this._startPromise = null;
-      this._endpoint = endpoint;
-      this._refreshInterval = refreshInterval || 0;
-      this._refreshJitter = Math.floor(this._refreshInterval / 10);
-    }
-    /**
-     * Initializes the connection to the remote server and returns a promise
-     * containing the current instance
-     *
-     * @public
-     * @returns {Promise<JwtGateway>}
-     */
-
-
-    start() {
-      return Promise.resolve().then(() => {
-        if (this._startPromise === null) {
-          this._startPromise = Promise.resolve().then(() => {
-            this._started = true;
-            return this;
-          }).catch(e => {
-            this._startPromise = null;
-            return Promise.reject(e);
-          });
-        }
-
-        return this._startPromise;
-      });
-    }
-    /**
-     * Retrieves a JWT token from the remote server.
-     *
-     * @public
-     * @returns {Promise<String>}
-     */
-
-
-    readToken() {
-      return Promise.resolve().then(() => {
-        checkStart.call(this);
-        return Gateway.invoke(this._endpoint);
-      }).catch(e => {
-        const failure = FailureReason.forRequest({
-          endpoint: this._endpoint
-        }).addItem(FailureType.REQUEST_IDENTITY_FAILURE).format();
-        return Promise.reject(failure);
-      });
-    }
-    /**
-     * Returns a {@link RequestInterceptor} suitable for use with other API calls.
-     *
-     * @public
-     * @returns {RequestInterceptor}
-     */
-
-
-    toRequestInterceptor() {
-      const scheduler = new Scheduler();
-      let refreshPromise = null;
-      let refreshTime = null;
-
-      const refreshToken = () => {
-        if (refreshPromise === null || this._refreshInterval > 0 && refreshTime !== null && getTime() > refreshTime + this._refreshInterval + this._refreshJitter) {
-          refreshPromise = scheduler.backoff(() => this.readToken(), 750, 'Read JWT token', 3).then(token => {
-            refreshTime = getTime();
-            return token;
-          }).catch(e => {
-            refreshPromise = null;
-            refreshTime = null;
-            return Promise.reject(e);
-          });
-        }
-
-        return refreshPromise;
-      };
-
-      const delegate = (options, endpoint) => {
-        return refreshToken().then(token => {
-          options.headers = options.headers || {};
-          options.headers.Authorization = `Bearer ${token}`;
-          return options;
-        }).catch(e => {
-          const failure = FailureReason.forRequest({
-            endpoint: endpoint
-          }).addItem(FailureType.REQUEST_IDENTITY_FAILURE).format();
-          return Promise.reject(failure);
-        });
-      };
-
-      return RequestInterceptor.fromDelegate(delegate);
-    }
-    /**
-     * Creates and starts a new {@link RequestInterceptor} for use in the development environment.
-     *
-     * @public
-     * @static
-     * @param {String} userId - The identifier of the user to impersonate.
-     * @returns {Promise<RequestInterceptor>}
-     */
-
-
-    static forDevelopmentClient(userId) {
-      return Promise.resolve().then(() => {
-        assert.argumentIsRequired(userId, 'userId', String);
-        const gateway = new JwtGateway(JwtEndpoint.forDevelopment(userId), 300000);
-        return start(gateway).then(() => {
-          return gateway.toRequestInterceptor();
-        });
-      });
-    }
-    /**
-     * Creates and starts a new {@link RequestInterceptor} for use in the demo environment.
-     *
-     * @public
-     * @static
-     * @param {String} userId - The identifier of the user to impersonate.
-     * @returns {Promise<RequestInterceptor>}
-     */
-
-
-    static forDemoClient(userId) {
-      return Promise.resolve().then(() => {
-        assert.argumentIsRequired(userId, 'userId', String);
-        const gateway = new JwtGateway(JwtEndpoint.forDemo(userId), 300000);
-        return start(gateway).then(() => {
-          return gateway.toRequestInterceptor();
-        });
-      });
-    }
-
-    _onDispose() {
-      return;
-    }
-
-    toString() {
-      return '[JwtGateway]';
-    }
-
-  }
-
-  function start(gateway) {
-    return gateway.start().then(() => {
-      return gateway;
-    });
-  }
-
-  function checkStart() {
-    if (this.getIsDisposed()) {
-      throw new Error('Unable to use gateway, the gateway has been disposed.');
-    }
-
-    if (!this._started) {
-      throw new Error('Unable to use gateway, the gateway has not started.');
-    }
-  }
-
-  function getTime() {
-    return new Date().getTime();
-  }
-
-  return JwtGateway;
-})();
-
-},{"./JwtEndpoint":4,"@barchart/common-js/api/failures/FailureReason":7,"@barchart/common-js/api/failures/FailureType":9,"@barchart/common-js/api/http/Gateway":10,"@barchart/common-js/api/http/definitions/Endpoint":15,"@barchart/common-js/api/http/interceptors/RequestInterceptor":24,"@barchart/common-js/lang/Disposable":34,"@barchart/common-js/lang/assert":39,"@barchart/common-js/timing/Scheduler":49}],6:[function(require,module,exports){
-const JwtEndpoint = require('./gateway/jwt/JwtEndpoint'),
-      JwtGateway = require('./gateway/jwt/JwtGateway');
-
+},{"../security/JwtProvider":5,"./../common/Configuration":2,"@barchart/common-js/api/http/Gateway":9,"@barchart/common-js/api/http/builders/EndpointBuilder":11,"@barchart/common-js/api/http/definitions/ProtocolType":17,"@barchart/common-js/api/http/definitions/VerbType":18,"@barchart/common-js/api/http/interceptors/ErrorInterceptor":22,"@barchart/common-js/api/http/interceptors/RequestInterceptor":23,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":24,"@barchart/common-js/lang/Disposable":33,"@barchart/common-js/lang/Enum":34,"@barchart/common-js/lang/assert":38}],4:[function(require,module,exports){
 const UserConfigurationGateway = require('./gateway/UserConfigurationGateway');
 
 module.exports = (() => {
   'use strict';
 
   return {
-    JwtEndpoint: JwtEndpoint,
-    JwtGateway: JwtGateway,
     UserConfigurationGateway: UserConfigurationGateway,
     version: '1.4.1'
   };
 })();
 
-},{"./gateway/UserConfigurationGateway":3,"./gateway/jwt/JwtEndpoint":4,"./gateway/jwt/JwtGateway":5}],7:[function(require,module,exports){
+},{"./gateway/UserConfigurationGateway":3}],5:[function(require,module,exports){
+const assert = require('@barchart/common-js/lang/assert'),
+      Disposable = require('@barchart/common-js/lang/Disposable'),
+      Scheduler = require('@barchart/common-js/timing/Scheduler');
+
+const EndpointBuilder = require('@barchart/common-js/api/http/builders/EndpointBuilder'),
+      Gateway = require('@barchart/common-js/api/http/Gateway'),
+      ProtocolType = require('@barchart/common-js/api/http/definitions/ProtocolType'),
+      ResponseInterceptor = require('@barchart/common-js/api/http/interceptors/ResponseInterceptor'),
+      VerbType = require('@barchart/common-js/api/http/definitions/VerbType');
+
+const Configuration = require('../common/Configuration');
+
+module.exports = (() => {
+  'use strict';
+  /**
+   * Generates and caches a signed token (using a delegate). The cached token
+   * is refreshed periodically.
+   *
+   * @public
+   * @exported
+   * @param {Callbacks.JwtTokenGenerator} generator - An anonymous function which returns a signed JWT token.
+   * @param {Number} interval - The number of milliseconds which must pass before a new JWT token is generated.
+   */
+
+  class JwtProvider extends Disposable {
+    constructor(generator, interval) {
+      super();
+      assert.argumentIsRequired(generator, 'generator', Function);
+      assert.argumentIsRequired(interval, 'interval', Number);
+      this._generator = generator;
+      this._interval = interval;
+      this._tokenPromise = null;
+      this._tokenTimestamp = null;
+      this._scheduler = new Scheduler();
+    }
+    /**
+     * Reads the current token, refreshing if necessary.
+     *
+     * @public
+     * @returns {Promise<String>}
+     */
+
+
+    getToken() {
+      return Promise.resolve().then(() => {
+        const time = new Date().getTime();
+
+        if (this._tokenPromise === null || this._timestamp === null || this._tokenTimestamp + this._interval < time) {
+          this._tokenTimestamp = time;
+          this._tokenPromise = this._scheduler.backoff(() => this._generator(), 100, 'Read JWT token', 3);
+        }
+
+        return this._tokenPromise;
+      });
+    }
+    /**
+     * Builds a {@link JwtProvider} which will generate tokens impersonating the specified
+     * user. These tokens will only work in the "test" environment.
+     *
+     * Recall, the "test" environment is not "secure" -- any data saved here can be accessed
+     * by anyone (using this feature). Furthermore, data is periodically purged from the
+     * test environment.
+     *
+     * @public
+     * @static
+     * @param {String} userId - The user identifier to impersonate.
+     * @param {String} contextId - The context identifier of the user to impersonate.
+     * @param {String=} permissions - The desired permission level.
+     * @returns {JwtProvider}
+     */
+
+
+    static forTest(userId, contextId, permissions) {
+      return getJwtProviderForImpersonation(Configuration.getJwtImpersonationHost, 'test', userId, contextId, permissions);
+    }
+    /**
+     * Builds a {@link JwtProvider} which will generate tokens impersonating the specified
+     * user. The "development" environment is for Barchart use only and access is restricted
+     * to Barchart's internal network.
+     *
+     * @public
+     * @static
+     * @param {String} userId - The user identifier to impersonate.
+     * @param {String} contextId - The context identifier of the user to impersonate.
+     * @param {String=} permissions - The desired permission level.
+     * @returns {JwtProvider}
+     */
+
+
+    static forDevelopment(userId, contextId, permissions) {
+      return getJwtProviderForImpersonation(Configuration.getJwtImpersonationHost, 'dev', userId, contextId, permissions);
+    }
+
+    _onDispose() {
+      this._scheduler.dispose();
+
+      this._scheduler = null;
+    }
+
+    toString() {
+      return '[JwtProvider]';
+    }
+
+  }
+
+  function getJwtProviderForImpersonation(host, environment, userId, contextId, permissions) {
+    assert.argumentIsRequired(host, 'host', String);
+    assert.argumentIsRequired(environment, 'environment', String);
+    assert.argumentIsRequired(userId, 'userId', String);
+    assert.argumentIsRequired(contextId, 'contextId', String);
+    assert.argumentIsOptional(permissions, 'permissions', String);
+    const tokenEndpoint = EndpointBuilder.for('generate-impersonation-jwt-for-test', 'generate JWT token for test environment').withVerb(VerbType.POST).withProtocol(ProtocolType.HTTPS).withHost(host).withPathBuilder(pb => pb.withLiteralParameter('version', 'v1').withLiteralParameter('tokens', 'tokens').withLiteralParameter('impersonate', 'impersonate').withLiteralParameter('service', 'user_config').withLiteralParameter('environment', environment)).withBody().withResponseInterceptor(ResponseInterceptor.DATA).endpoint;
+    const payload = {};
+    payload.userId = userId;
+    payload.contextId = contextId;
+
+    if (permissions) {
+      payload.permissions = permissions;
+    }
+
+    return new JwtProvider(() => Gateway.invoke(tokenEndpoint, payload), 5 * 60 * 1000);
+  }
+
+  return JwtProvider;
+})();
+
+},{"../common/Configuration":2,"@barchart/common-js/api/http/Gateway":9,"@barchart/common-js/api/http/builders/EndpointBuilder":11,"@barchart/common-js/api/http/definitions/ProtocolType":17,"@barchart/common-js/api/http/definitions/VerbType":18,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":24,"@barchart/common-js/lang/Disposable":33,"@barchart/common-js/lang/assert":38,"@barchart/common-js/timing/Scheduler":48}],6:[function(require,module,exports){
 const assert = require('./../../lang/assert'),
       is = require('./../../lang/is');
 
@@ -737,6 +726,24 @@ module.exports = (() => {
 
     getIsSevere() {
       return this._head.search(item => item.type.severe, false, false) !== null;
+    }
+    /**
+     * Searches the tree of {@link FailureReasonItem} instances for a non-standard
+     * http error code.
+     *
+     * @public
+     * @returns {Number|null}
+     */
+
+
+    getErrorCode() {
+      const node = this._head.search(item => item.type.error !== null, true, false);
+
+      if (node !== null) {
+        return node.getValue().type.error;
+      } else {
+        return null;
+      }
     }
 
     toJSON() {
@@ -841,7 +848,7 @@ module.exports = (() => {
   return FailureReason;
 })();
 
-},{"./../../collections/Tree":27,"./../../lang/assert":39,"./../../lang/is":42,"./../../serialization/json/Schema":48,"./FailureReasonItem":8,"./FailureType":9}],8:[function(require,module,exports){
+},{"./../../collections/Tree":26,"./../../lang/assert":38,"./../../lang/is":41,"./../../serialization/json/Schema":47,"./FailureReasonItem":7,"./FailureType":8}],7:[function(require,module,exports){
 const assert = require('./../../lang/assert'),
       attributes = require('./../../lang/attributes');
 
@@ -927,7 +934,7 @@ module.exports = (() => {
   return FailureReasonItem;
 })();
 
-},{"./../../lang/assert":39,"./../../lang/attributes":40,"./FailureType":9}],9:[function(require,module,exports){
+},{"./../../lang/assert":38,"./../../lang/attributes":39,"./FailureType":8}],8:[function(require,module,exports){
 const assert = require('./../../lang/assert'),
       Enum = require('./../../lang/Enum'),
       is = require('./../../lang/is');
@@ -942,13 +949,15 @@ module.exports = (() => {
    * @param {String} code - The enumeration code (and description).
    * @param {String} template - The template string for formatting human-readable messages.
    * @param {Boolean=} severe - Indicates if the failure is severe (default is true).
+   * @param {Number=} error - The HTTP error code which should be used as part of an HTTP response.
    */
 
   class FailureType extends Enum {
-    constructor(code, template, severe) {
+    constructor(code, template, severe, error) {
       super(code, code);
       assert.argumentIsRequired(template, 'template', String);
       assert.argumentIsOptional(severe, 'severe', Boolean);
+      assert.argumentIsOptional(error, 'error', Number);
       this._template = template;
 
       if (is.boolean(severe)) {
@@ -956,6 +965,8 @@ module.exports = (() => {
       } else {
         this._severe = true;
       }
+
+      this._error = error || null;
     }
     /**
      * The template string for formatting human-readable messages.
@@ -978,6 +989,17 @@ module.exports = (() => {
 
     get severe() {
       return this._severe;
+    }
+    /**
+     * The HTTP error code which should be used as part of an HTTP response.
+     *
+     * @public
+     * @return {Number|null}
+     */
+
+
+    get error() {
+      return this._error;
     }
     /**
      * One or more data points is missing.
@@ -1118,7 +1140,7 @@ module.exports = (() => {
   return FailureType;
 })();
 
-},{"./../../lang/Enum":35,"./../../lang/assert":39,"./../../lang/is":42}],10:[function(require,module,exports){
+},{"./../../lang/Enum":34,"./../../lang/assert":38,"./../../lang/is":41}],9:[function(require,module,exports){
 const axios = require('axios');
 
 const array = require('./../../lang/array'),
@@ -1327,7 +1349,7 @@ module.exports = (() => {
   return Gateway;
 })();
 
-},{"./../../lang/array":38,"./../../lang/assert":39,"./../../lang/attributes":40,"./../../lang/is":42,"./../../lang/promise":44,"./../failures/FailureReason":7,"./../failures/FailureType":9,"./definitions/Endpoint":15,"./definitions/VerbType":19,"axios":50}],11:[function(require,module,exports){
+},{"./../../lang/array":37,"./../../lang/assert":38,"./../../lang/attributes":39,"./../../lang/is":41,"./../../lang/promise":43,"./../failures/FailureReason":6,"./../failures/FailureType":8,"./definitions/Endpoint":14,"./definitions/VerbType":18,"axios":49}],10:[function(require,module,exports){
 const assert = require('./../../../lang/assert');
 
 const Credentials = require('./../definitions/Credentials');
@@ -1417,7 +1439,7 @@ module.exports = (() => {
   return CredentialsBuilder;
 })();
 
-},{"./../../../lang/assert":39,"./../definitions/Credentials":14}],12:[function(require,module,exports){
+},{"./../../../lang/assert":38,"./../definitions/Credentials":13}],11:[function(require,module,exports){
 const assert = require('./../../../lang/assert');
 
 const CredentialsBuilder = require('./CredentialsBuilder'),
@@ -1718,7 +1740,7 @@ module.exports = (() => {
   return EndpointBuilder;
 })();
 
-},{"./../../../lang/assert":39,"./../definitions/Endpoint":15,"./../definitions/Parameters":17,"./../definitions/ProtocolType":18,"./../definitions/VerbType":19,"./../interceptors/CompositeErrorInterceptor":20,"./../interceptors/CompositeRequestInterceptor":21,"./../interceptors/CompositeResponseInterceptor":22,"./../interceptors/ErrorInterceptor":23,"./../interceptors/RequestInterceptor":24,"./../interceptors/ResponseInterceptor":25,"./CredentialsBuilder":11,"./ParametersBuilder":13}],13:[function(require,module,exports){
+},{"./../../../lang/assert":38,"./../definitions/Endpoint":14,"./../definitions/Parameters":16,"./../definitions/ProtocolType":17,"./../definitions/VerbType":18,"./../interceptors/CompositeErrorInterceptor":19,"./../interceptors/CompositeRequestInterceptor":20,"./../interceptors/CompositeResponseInterceptor":21,"./../interceptors/ErrorInterceptor":22,"./../interceptors/RequestInterceptor":23,"./../interceptors/ResponseInterceptor":24,"./CredentialsBuilder":10,"./ParametersBuilder":12}],12:[function(require,module,exports){
 const assert = require('./../../../lang/assert'),
       attributes = require('./../../../lang/attributes'),
       is = require('./../../../lang/is');
@@ -1853,7 +1875,7 @@ module.exports = (() => {
   return ParametersBuilder;
 })();
 
-},{"./../../../lang/assert":39,"./../../../lang/attributes":40,"./../../../lang/is":42,"./../definitions/Parameter":16,"./../definitions/Parameters":17}],14:[function(require,module,exports){
+},{"./../../../lang/assert":38,"./../../../lang/attributes":39,"./../../../lang/is":41,"./../definitions/Parameter":15,"./../definitions/Parameters":16}],13:[function(require,module,exports){
 const is = require('./../../../lang/is');
 
 module.exports = (() => {
@@ -1919,7 +1941,7 @@ module.exports = (() => {
   return Credentials;
 })();
 
-},{"./../../../lang/is":42}],15:[function(require,module,exports){
+},{"./../../../lang/is":41}],14:[function(require,module,exports){
 const is = require('./../../../lang/is');
 
 const Parameters = require('./Parameters'),
@@ -2193,7 +2215,7 @@ module.exports = (() => {
   return Endpoint;
 })();
 
-},{"./../../../lang/is":42,"./../interceptors/ErrorInterceptor":23,"./../interceptors/RequestInterceptor":24,"./../interceptors/ResponseInterceptor":25,"./Parameters":17,"./ProtocolType":18,"./VerbType":19}],16:[function(require,module,exports){
+},{"./../../../lang/is":41,"./../interceptors/ErrorInterceptor":22,"./../interceptors/RequestInterceptor":23,"./../interceptors/ResponseInterceptor":24,"./Parameters":16,"./ProtocolType":17,"./VerbType":18}],15:[function(require,module,exports){
 const is = require('./../../../lang/is');
 
 module.exports = (() => {
@@ -2295,7 +2317,7 @@ module.exports = (() => {
   return Parameter;
 })();
 
-},{"./../../../lang/is":42}],17:[function(require,module,exports){
+},{"./../../../lang/is":41}],16:[function(require,module,exports){
 const is = require('./../../../lang/is');
 
 const Parameter = require('./Parameter');
@@ -2356,7 +2378,7 @@ module.exports = (() => {
   return Parameters;
 })();
 
-},{"./../../../lang/is":42,"./Parameter":16}],18:[function(require,module,exports){
+},{"./../../../lang/is":41,"./Parameter":15}],17:[function(require,module,exports){
 const assert = require('./../../../lang/assert'),
       Enum = require('./../../../lang/Enum'),
       is = require('./../../../lang/is');
@@ -2437,7 +2459,7 @@ module.exports = (() => {
   return ProtocolType;
 })();
 
-},{"./../../../lang/Enum":35,"./../../../lang/assert":39,"./../../../lang/is":42}],19:[function(require,module,exports){
+},{"./../../../lang/Enum":34,"./../../../lang/assert":38,"./../../../lang/is":41}],18:[function(require,module,exports){
 const Enum = require('./../../../lang/Enum');
 
 module.exports = (() => {
@@ -2512,7 +2534,7 @@ module.exports = (() => {
   return VerbType;
 })();
 
-},{"./../../../lang/Enum":35}],20:[function(require,module,exports){
+},{"./../../../lang/Enum":34}],19:[function(require,module,exports){
 const assert = require('./../../../lang/assert');
 
 const ErrorInterceptor = require('./ErrorInterceptor');
@@ -2552,7 +2574,7 @@ module.exports = (() => {
   return CompositeErrorInterceptor;
 })();
 
-},{"./../../../lang/assert":39,"./ErrorInterceptor":23}],21:[function(require,module,exports){
+},{"./../../../lang/assert":38,"./ErrorInterceptor":22}],20:[function(require,module,exports){
 const assert = require('./../../../lang/assert');
 
 const RequestInterceptor = require('./RequestInterceptor');
@@ -2592,7 +2614,7 @@ module.exports = (() => {
   return CompositeRequestInterceptor;
 })();
 
-},{"./../../../lang/assert":39,"./RequestInterceptor":24}],22:[function(require,module,exports){
+},{"./../../../lang/assert":38,"./RequestInterceptor":23}],21:[function(require,module,exports){
 const assert = require('./../../../lang/assert');
 
 const ResponseInterceptor = require('./ResponseInterceptor');
@@ -2632,7 +2654,7 @@ module.exports = (() => {
   return CompositeResponseInterceptor;
 })();
 
-},{"./../../../lang/assert":39,"./ResponseInterceptor":25}],23:[function(require,module,exports){
+},{"./../../../lang/assert":38,"./ResponseInterceptor":24}],22:[function(require,module,exports){
 const assert = require('./../../../lang/assert'),
       is = require('./../../../lang/is');
 
@@ -2773,7 +2795,7 @@ module.exports = (() => {
   return ErrorInterceptor;
 })();
 
-},{"./../../../lang/assert":39,"./../../../lang/is":42,"./../../failures/FailureReason":7,"./../../failures/FailureType":9}],24:[function(require,module,exports){
+},{"./../../../lang/assert":38,"./../../../lang/is":41,"./../../failures/FailureReason":6,"./../../failures/FailureType":8}],23:[function(require,module,exports){
 const assert = require('./../../../lang/assert');
 
 module.exports = (() => {
@@ -2877,7 +2899,7 @@ module.exports = (() => {
   return RequestInterceptor;
 })();
 
-},{"./../../../lang/assert":39}],25:[function(require,module,exports){
+},{"./../../../lang/assert":38}],24:[function(require,module,exports){
 const assert = require('./../../../lang/assert');
 
 module.exports = (() => {
@@ -2981,7 +3003,7 @@ module.exports = (() => {
   return ResponseInterceptor;
 })();
 
-},{"./../../../lang/assert":39}],26:[function(require,module,exports){
+},{"./../../../lang/assert":38}],25:[function(require,module,exports){
 module.exports = (() => {
   'use strict';
   /**
@@ -3060,7 +3082,7 @@ module.exports = (() => {
   return LinkedList;
 })();
 
-},{}],27:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 const is = require('./../lang/is');
 
 module.exports = (() => {
@@ -3378,7 +3400,7 @@ module.exports = (() => {
   return Tree;
 })();
 
-},{"./../lang/is":42}],28:[function(require,module,exports){
+},{"./../lang/is":41}],27:[function(require,module,exports){
 const assert = require('./../../lang/assert'),
       comparators = require('./comparators');
 
@@ -3497,7 +3519,7 @@ module.exports = (() => {
   return ComparatorBuilder;
 })();
 
-},{"./../../lang/assert":39,"./comparators":29}],29:[function(require,module,exports){
+},{"./../../lang/assert":38,"./comparators":28}],28:[function(require,module,exports){
 const assert = require('./../../lang/assert');
 
 module.exports = (() => {
@@ -3587,7 +3609,7 @@ module.exports = (() => {
   };
 })();
 
-},{"./../../lang/assert":39}],30:[function(require,module,exports){
+},{"./../../lang/assert":38}],29:[function(require,module,exports){
 const assert = require('./assert');
 
 module.exports = (() => {
@@ -3653,7 +3675,7 @@ module.exports = (() => {
   return AdHoc;
 })();
 
-},{"./assert":39}],31:[function(require,module,exports){
+},{"./assert":38}],30:[function(require,module,exports){
 const assert = require('./assert'),
       Enum = require('./Enum'),
       is = require('./is');
@@ -3759,7 +3781,7 @@ module.exports = (() => {
   return Currency;
 })();
 
-},{"./Enum":35,"./assert":39,"./is":42}],32:[function(require,module,exports){
+},{"./Enum":34,"./assert":38,"./is":41}],31:[function(require,module,exports){
 const assert = require('./assert'),
       ComparatorBuilder = require('./../collections/sorting/ComparatorBuilder'),
       comparators = require('./../collections/sorting/comparators'),
@@ -4278,7 +4300,7 @@ module.exports = (() => {
   return Day;
 })();
 
-},{"./../collections/sorting/ComparatorBuilder":28,"./../collections/sorting/comparators":29,"./assert":39,"./is":42}],33:[function(require,module,exports){
+},{"./../collections/sorting/ComparatorBuilder":27,"./../collections/sorting/comparators":28,"./assert":38,"./is":41}],32:[function(require,module,exports){
 const assert = require('./assert'),
       Enum = require('./Enum'),
       is = require('./is');
@@ -4860,7 +4882,7 @@ module.exports = (() => {
   return Decimal;
 })();
 
-},{"./Enum":35,"./assert":39,"./is":42,"big.js":76}],34:[function(require,module,exports){
+},{"./Enum":34,"./assert":38,"./is":41,"big.js":75}],33:[function(require,module,exports){
 const assert = require('./assert');
 
 module.exports = (() => {
@@ -4971,7 +4993,7 @@ module.exports = (() => {
   return Disposable;
 })();
 
-},{"./assert":39}],35:[function(require,module,exports){
+},{"./assert":38}],34:[function(require,module,exports){
 const assert = require('./assert');
 
 module.exports = (() => {
@@ -5091,7 +5113,7 @@ module.exports = (() => {
   return Enum;
 })();
 
-},{"./assert":39}],36:[function(require,module,exports){
+},{"./assert":38}],35:[function(require,module,exports){
 const assert = require('./assert'),
       is = require('./is');
 
@@ -5192,7 +5214,7 @@ module.exports = (() => {
   return Money;
 })();
 
-},{"./Currency":31,"./Decimal":33,"./assert":39,"./is":42}],37:[function(require,module,exports){
+},{"./Currency":30,"./Decimal":32,"./assert":38,"./is":41}],36:[function(require,module,exports){
 const assert = require('./assert'),
       is = require('./is');
 
@@ -5200,8 +5222,11 @@ const moment = require('moment-timezone');
 
 module.exports = (() => {
   'use strict';
+
+  const MILLISECONDS_PER_SECOND = 1000;
   /**
-   * A data structure encapsulates (and lazy loads) a moment (see https://momentjs.com/).
+   * An immutable data structure that encapsulates (and lazy loads)
+   * a moment (see https://momentjs.com/).
    *
    * @public
    * @param {Number} timestamp
@@ -5217,7 +5242,7 @@ module.exports = (() => {
       this._moment = null;
     }
     /**
-     * The timestamp.
+     * The timestamp (milliseconds since epoch).
      *
      * @public
      * @returns {Number}
@@ -5245,6 +5270,34 @@ module.exports = (() => {
       }
 
       return this._moment;
+    }
+    /**
+     * Returns a new {@link Timestamp} instance shifted forward (or backward)
+     * by a specific number of seconds.
+     *
+     * @public
+     * @param {Number} milliseconds
+     * @returns {Timestamp}
+     */
+
+
+    add(milliseconds) {
+      assert.argumentIsRequired(milliseconds, 'seconds', Number);
+      return new Timestamp(this._timestamp + milliseconds, this._timezone);
+    }
+    /**
+     * Returns a new {@link Timestamp} instance shifted forward (or backward)
+     * by a specific number of seconds.
+     *
+     * @public
+     * @param {Number} seconds
+     * @returns {Timestamp}
+     */
+
+
+    addSeconds(seconds) {
+      assert.argumentIsRequired(seconds, 'seconds', Number);
+      return this.add(seconds * MILLISECONDS_PER_SECOND);
     }
     /**
      * Returns the JSON representation.
@@ -5304,7 +5357,7 @@ module.exports = (() => {
   return Timestamp;
 })();
 
-},{"./assert":39,"./is":42,"moment-timezone":79}],38:[function(require,module,exports){
+},{"./assert":38,"./is":41,"moment-timezone":78}],37:[function(require,module,exports){
 const assert = require('./assert'),
       is = require('./is');
 
@@ -5759,7 +5812,7 @@ module.exports = (() => {
   }
 })();
 
-},{"./assert":39,"./is":42}],39:[function(require,module,exports){
+},{"./assert":38,"./is":41}],38:[function(require,module,exports){
 const is = require('./is');
 
 module.exports = (() => {
@@ -5904,7 +5957,7 @@ module.exports = (() => {
   };
 })();
 
-},{"./is":42}],40:[function(require,module,exports){
+},{"./is":41}],39:[function(require,module,exports){
 const assert = require('./assert'),
       is = require('./is');
 
@@ -6067,7 +6120,7 @@ module.exports = (() => {
   };
 })();
 
-},{"./assert":39,"./is":42}],41:[function(require,module,exports){
+},{"./assert":38,"./is":41}],40:[function(require,module,exports){
 module.exports = (() => {
   'use strict';
 
@@ -6110,7 +6163,7 @@ module.exports = (() => {
   };
 })();
 
-},{}],42:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 module.exports = (() => {
   'use strict';
   /**
@@ -6192,6 +6245,18 @@ module.exports = (() => {
      */
     negative(candidate) {
       return this.number(candidate) && candidate < 0;
+    },
+
+    /**
+     * Returns true if the argument is iterable.
+     *
+     * @static
+     * @public
+     * @param {*} candidate
+     * @returns {boolean}
+     */
+    iterable(candidate) {
+      return !this.null(candidate) && !this.undefined(candidate) && this.fn(candidate[Symbol.iterator]);
     },
 
     /**
@@ -6317,7 +6382,7 @@ module.exports = (() => {
   };
 })();
 
-},{}],43:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 const array = require('./array'),
       is = require('./is');
 
@@ -6477,7 +6542,7 @@ module.exports = (() => {
   return object;
 })();
 
-},{"./array":38,"./is":42}],44:[function(require,module,exports){
+},{"./array":37,"./is":41}],43:[function(require,module,exports){
 const assert = require('./assert');
 
 module.exports = (() => {
@@ -6617,6 +6682,31 @@ module.exports = (() => {
     },
 
     /**
+     * Given an array of functions, where each returns a promise, runs
+     * the functions in sequential order, until one of the function
+     * returns a successful promise with a non-null result. Any
+     * rejected promise is ignored.
+     *
+     * @public
+     * @param {Function[]} executors
+     * @returns {Promise}
+     */
+    first(executors) {
+      return Promise.resolve().then(() => {
+        assert.argumentIsArray(executors, 'executors', Function);
+        return executors.reduce((previous, executor) => {
+          return previous.then(result => {
+            if (result === null) {
+              return executor().catch(() => Promise.resolve(null));
+            } else {
+              return previous;
+            }
+          });
+        }, Promise.resolve(null));
+      });
+    },
+
+    /**
      * Creates a new promise, given an executor.
      *
      * This is a wrapper for the {@link Promise} constructor; however, any error
@@ -6641,7 +6731,7 @@ module.exports = (() => {
   };
 })();
 
-},{"./assert":39}],45:[function(require,module,exports){
+},{"./assert":38}],44:[function(require,module,exports){
 const Currency = require('./../../lang/Currency'),
       Money = require('./../../lang/Money');
 
@@ -6717,7 +6807,7 @@ module.exports = (() => {
   return Component;
 })();
 
-},{"./../../lang/Currency":31,"./../../lang/Money":36,"./DataType":46,"./Field":47}],46:[function(require,module,exports){
+},{"./../../lang/Currency":30,"./../../lang/Money":35,"./DataType":45,"./Field":46}],45:[function(require,module,exports){
 const moment = require('moment');
 
 const AdHoc = require('./../../lang/AdHoc'),
@@ -7033,7 +7123,7 @@ module.exports = (() => {
   return DataType;
 })();
 
-},{"./../../lang/AdHoc":30,"./../../lang/Day":32,"./../../lang/Decimal":33,"./../../lang/Enum":35,"./../../lang/Timestamp":37,"./../../lang/assert":39,"./../../lang/is":42,"moment":81}],47:[function(require,module,exports){
+},{"./../../lang/AdHoc":29,"./../../lang/Day":31,"./../../lang/Decimal":32,"./../../lang/Enum":34,"./../../lang/Timestamp":36,"./../../lang/assert":38,"./../../lang/is":41,"moment":80}],46:[function(require,module,exports){
 module.exports = (() => {
   'use strict';
   /**
@@ -7094,7 +7184,7 @@ module.exports = (() => {
   return Field;
 })();
 
-},{}],48:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 const attributes = require('./../../lang/attributes'),
       functions = require('./../../lang/functions'),
       is = require('./../../lang/is');
@@ -7417,7 +7507,7 @@ module.exports = (() => {
   return Schema;
 })();
 
-},{"./../../collections/LinkedList":26,"./../../collections/Tree":27,"./../../lang/attributes":40,"./../../lang/functions":41,"./../../lang/is":42,"./Component":45,"./Field":47}],49:[function(require,module,exports){
+},{"./../../collections/LinkedList":25,"./../../collections/Tree":26,"./../../lang/attributes":39,"./../../lang/functions":40,"./../../lang/is":41,"./Component":44,"./Field":46}],48:[function(require,module,exports){
 const assert = require('./../lang/assert'),
       Disposable = require('./../lang/Disposable'),
       is = require('./../lang/is'),
@@ -7623,9 +7713,9 @@ module.exports = (() => {
   return Scheduler;
 })();
 
-},{"./../lang/Disposable":34,"./../lang/assert":39,"./../lang/is":42,"./../lang/object":43,"./../lang/promise":44}],50:[function(require,module,exports){
+},{"./../lang/Disposable":33,"./../lang/assert":38,"./../lang/is":41,"./../lang/object":42,"./../lang/promise":43}],49:[function(require,module,exports){
 module.exports = require('./lib/axios');
-},{"./lib/axios":52}],51:[function(require,module,exports){
+},{"./lib/axios":51}],50:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -7807,7 +7897,7 @@ module.exports = function xhrAdapter(config) {
   });
 };
 
-},{"../core/buildFullPath":58,"../core/createError":59,"./../core/settle":63,"./../helpers/buildURL":67,"./../helpers/cookies":69,"./../helpers/isURLSameOrigin":71,"./../helpers/parseHeaders":73,"./../utils":75}],52:[function(require,module,exports){
+},{"../core/buildFullPath":57,"../core/createError":58,"./../core/settle":62,"./../helpers/buildURL":66,"./../helpers/cookies":68,"./../helpers/isURLSameOrigin":70,"./../helpers/parseHeaders":72,"./../utils":74}],51:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -7862,7 +7952,7 @@ module.exports = axios;
 // Allow use of default import syntax in TypeScript
 module.exports.default = axios;
 
-},{"./cancel/Cancel":53,"./cancel/CancelToken":54,"./cancel/isCancel":55,"./core/Axios":56,"./core/mergeConfig":62,"./defaults":65,"./helpers/bind":66,"./helpers/spread":74,"./utils":75}],53:[function(require,module,exports){
+},{"./cancel/Cancel":52,"./cancel/CancelToken":53,"./cancel/isCancel":54,"./core/Axios":55,"./core/mergeConfig":61,"./defaults":64,"./helpers/bind":65,"./helpers/spread":73,"./utils":74}],52:[function(require,module,exports){
 'use strict';
 
 /**
@@ -7883,7 +7973,7 @@ Cancel.prototype.__CANCEL__ = true;
 
 module.exports = Cancel;
 
-},{}],54:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 'use strict';
 
 var Cancel = require('./Cancel');
@@ -7942,14 +8032,14 @@ CancelToken.source = function source() {
 
 module.exports = CancelToken;
 
-},{"./Cancel":53}],55:[function(require,module,exports){
+},{"./Cancel":52}],54:[function(require,module,exports){
 'use strict';
 
 module.exports = function isCancel(value) {
   return !!(value && value.__CANCEL__);
 };
 
-},{}],56:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8045,7 +8135,7 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 
 module.exports = Axios;
 
-},{"../helpers/buildURL":67,"./../utils":75,"./InterceptorManager":57,"./dispatchRequest":60,"./mergeConfig":62}],57:[function(require,module,exports){
+},{"../helpers/buildURL":66,"./../utils":74,"./InterceptorManager":56,"./dispatchRequest":59,"./mergeConfig":61}],56:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8099,7 +8189,7 @@ InterceptorManager.prototype.forEach = function forEach(fn) {
 
 module.exports = InterceptorManager;
 
-},{"./../utils":75}],58:[function(require,module,exports){
+},{"./../utils":74}],57:[function(require,module,exports){
 'use strict';
 
 var isAbsoluteURL = require('../helpers/isAbsoluteURL');
@@ -8121,7 +8211,7 @@ module.exports = function buildFullPath(baseURL, requestedURL) {
   return requestedURL;
 };
 
-},{"../helpers/combineURLs":68,"../helpers/isAbsoluteURL":70}],59:[function(require,module,exports){
+},{"../helpers/combineURLs":67,"../helpers/isAbsoluteURL":69}],58:[function(require,module,exports){
 'use strict';
 
 var enhanceError = require('./enhanceError');
@@ -8141,7 +8231,7 @@ module.exports = function createError(message, config, code, request, response) 
   return enhanceError(error, config, code, request, response);
 };
 
-},{"./enhanceError":61}],60:[function(require,module,exports){
+},{"./enhanceError":60}],59:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8222,7 +8312,7 @@ module.exports = function dispatchRequest(config) {
   });
 };
 
-},{"../cancel/isCancel":55,"../defaults":65,"./../utils":75,"./transformData":64}],61:[function(require,module,exports){
+},{"../cancel/isCancel":54,"../defaults":64,"./../utils":74,"./transformData":63}],60:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8266,7 +8356,7 @@ module.exports = function enhanceError(error, config, code, request, response) {
   return error;
 };
 
-},{}],62:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -8341,7 +8431,7 @@ module.exports = function mergeConfig(config1, config2) {
   return config;
 };
 
-},{"../utils":75}],63:[function(require,module,exports){
+},{"../utils":74}],62:[function(require,module,exports){
 'use strict';
 
 var createError = require('./createError');
@@ -8368,7 +8458,7 @@ module.exports = function settle(resolve, reject, response) {
   }
 };
 
-},{"./createError":59}],64:[function(require,module,exports){
+},{"./createError":58}],63:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8390,7 +8480,7 @@ module.exports = function transformData(data, headers, fns) {
   return data;
 };
 
-},{"./../utils":75}],65:[function(require,module,exports){
+},{"./../utils":74}],64:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -8491,7 +8581,7 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 module.exports = defaults;
 
 }).call(this,require('_process'))
-},{"./adapters/http":51,"./adapters/xhr":51,"./helpers/normalizeHeaderName":72,"./utils":75,"_process":77}],66:[function(require,module,exports){
+},{"./adapters/http":50,"./adapters/xhr":50,"./helpers/normalizeHeaderName":71,"./utils":74,"_process":76}],65:[function(require,module,exports){
 'use strict';
 
 module.exports = function bind(fn, thisArg) {
@@ -8504,7 +8594,7 @@ module.exports = function bind(fn, thisArg) {
   };
 };
 
-},{}],67:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8577,7 +8667,7 @@ module.exports = function buildURL(url, params, paramsSerializer) {
   return url;
 };
 
-},{"./../utils":75}],68:[function(require,module,exports){
+},{"./../utils":74}],67:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8593,7 +8683,7 @@ module.exports = function combineURLs(baseURL, relativeURL) {
     : baseURL;
 };
 
-},{}],69:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8648,7 +8738,7 @@ module.exports = (
     })()
 );
 
-},{"./../utils":75}],70:[function(require,module,exports){
+},{"./../utils":74}],69:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8664,7 +8754,7 @@ module.exports = function isAbsoluteURL(url) {
   return /^([a-z][a-z\d\+\-\.]*:)?\/\//i.test(url);
 };
 
-},{}],71:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8734,7 +8824,7 @@ module.exports = (
     })()
 );
 
-},{"./../utils":75}],72:[function(require,module,exports){
+},{"./../utils":74}],71:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -8748,7 +8838,7 @@ module.exports = function normalizeHeaderName(headers, normalizedName) {
   });
 };
 
-},{"../utils":75}],73:[function(require,module,exports){
+},{"../utils":74}],72:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8803,7 +8893,7 @@ module.exports = function parseHeaders(headers) {
   return parsed;
 };
 
-},{"./../utils":75}],74:[function(require,module,exports){
+},{"./../utils":74}],73:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8832,7 +8922,7 @@ module.exports = function spread(callback) {
   };
 };
 
-},{}],75:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
 'use strict';
 
 var bind = require('./helpers/bind');
@@ -9178,7 +9268,7 @@ module.exports = {
   trim: trim
 };
 
-},{"./helpers/bind":66}],76:[function(require,module,exports){
+},{"./helpers/bind":65}],75:[function(require,module,exports){
 /*
  *  big.js v5.2.2
  *  A small, fast, easy-to-use library for arbitrary-precision decimal arithmetic.
@@ -10121,7 +10211,7 @@ module.exports = {
   }
 })(this);
 
-},{}],77:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -10307,7 +10397,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],78:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 module.exports={
 	"version": "2019b",
 	"zones": [
@@ -10908,11 +10998,11 @@ module.exports={
 		"Pacific/Tarawa|Pacific/Wallis"
 	]
 }
-},{}],79:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 var moment = module.exports = require("./moment-timezone");
 moment.tz.load(require('./data/packed/latest.json'));
 
-},{"./data/packed/latest.json":78,"./moment-timezone":80}],80:[function(require,module,exports){
+},{"./data/packed/latest.json":77,"./moment-timezone":79}],79:[function(require,module,exports){
 //! moment-timezone.js
 //! version : 0.5.26
 //! Copyright (c) JS Foundation and other contributors
@@ -11541,7 +11631,7 @@ moment.tz.load(require('./data/packed/latest.json'));
 	return moment;
 }));
 
-},{"moment":81}],81:[function(require,module,exports){
+},{"moment":80}],80:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -16145,4 +16235,4 @@ moment.tz.load(require('./data/packed/latest.json'));
 
 })));
 
-},{}]},{},[6,1]);
+},{}]},{},[4,1]);
