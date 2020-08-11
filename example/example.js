@@ -492,7 +492,7 @@ module.exports = (() => {
 
   return {
     UserConfigurationGateway: UserConfigurationGateway,
-    version: '1.4.2'
+    version: '2.0.0'
   };
 })();
 

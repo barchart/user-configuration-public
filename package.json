@@ -1,6 +1,6 @@
 {
   "name": "@barchart/user-configuration-client-js",
-  "version": "1.4.1",
+  "version": "2.0.0",
   "description": "JavaScript SDK for Barchart's User Preference Service",
   "author": {
     "name": "Bryan Ingle",
