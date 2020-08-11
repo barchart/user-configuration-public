@@ -1,6 +1,7 @@
 const gulp = require('gulp');
 
-const fs = require('fs');
+const exec = require('child_process').exec,
+	fs = require('fs');
 
 const browserify = require('browserify'),
 	buffer = require('vinyl-buffer'),
