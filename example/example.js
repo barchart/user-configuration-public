@@ -235,6 +235,8 @@ const assert = require('@barchart/common-js/lang/assert'),
       Enum = require('@barchart/common-js/lang/Enum');
 
 const EndpointBuilder = require('@barchart/common-js/api/http/builders/EndpointBuilder'),
+      FailureReason = require('@barchart/common-js/api/failures/FailureReason'),
+      FailureType = require('@barchart/common-js/api/failures/FailureType'),
       Gateway = require('@barchart/common-js/api/http/Gateway'),
       ProtocolType = require('@barchart/common-js/api/http/definitions/ProtocolType'),
       ErrorInterceptor = require('@barchart/common-js/api/http/interceptors/ErrorInterceptor'),
@@ -484,7 +486,7 @@ module.exports = (() => {
   return UserConfigurationGateway;
 })();
 
-},{"../security/JwtProvider":5,"./../common/Configuration":2,"@barchart/common-js/api/http/Gateway":9,"@barchart/common-js/api/http/builders/EndpointBuilder":11,"@barchart/common-js/api/http/definitions/ProtocolType":17,"@barchart/common-js/api/http/definitions/VerbType":18,"@barchart/common-js/api/http/interceptors/ErrorInterceptor":22,"@barchart/common-js/api/http/interceptors/RequestInterceptor":23,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":24,"@barchart/common-js/lang/Disposable":33,"@barchart/common-js/lang/Enum":34,"@barchart/common-js/lang/assert":38}],4:[function(require,module,exports){
+},{"../security/JwtProvider":5,"./../common/Configuration":2,"@barchart/common-js/api/failures/FailureReason":6,"@barchart/common-js/api/failures/FailureType":8,"@barchart/common-js/api/http/Gateway":9,"@barchart/common-js/api/http/builders/EndpointBuilder":11,"@barchart/common-js/api/http/definitions/ProtocolType":17,"@barchart/common-js/api/http/definitions/VerbType":18,"@barchart/common-js/api/http/interceptors/ErrorInterceptor":22,"@barchart/common-js/api/http/interceptors/RequestInterceptor":23,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":24,"@barchart/common-js/lang/Disposable":33,"@barchart/common-js/lang/Enum":34,"@barchart/common-js/lang/assert":38}],4:[function(require,module,exports){
 const UserConfigurationGateway = require('./gateway/UserConfigurationGateway');
 
 module.exports = (() => {
@@ -492,13 +494,14 @@ module.exports = (() => {
 
   return {
     UserConfigurationGateway: UserConfigurationGateway,
-    version: '2.0.0'
+    version: '2.1.0'
   };
 })();
 
 },{"./gateway/UserConfigurationGateway":3}],5:[function(require,module,exports){
 const assert = require('@barchart/common-js/lang/assert'),
       Disposable = require('@barchart/common-js/lang/Disposable'),
+      random = require('@barchart/common-js/lang/random'),
       Scheduler = require('@barchart/common-js/timing/Scheduler');
 
 const EndpointBuilder = require('@barchart/common-js/api/http/builders/EndpointBuilder'),
@@ -511,25 +514,29 @@ const Configuration = require('../common/Configuration');
 
 module.exports = (() => {
   'use strict';
+
+  const DEFAULT_REFRESH_INTERVAL_MILLISECONDS = 5 * 60 * 1000;
   /**
    * Generates and caches a signed token (using a delegate). The cached token
    * is refreshed periodically.
    *
    * @public
    * @exported
-   * @param {Callbacks.JwtTokenGenerator} generator - An anonymous function which returns a signed JWT token.
-   * @param {Number} interval - The number of milliseconds which must pass before a new JWT token is generated.
+   * @param {Callbacks.JwtTokenGenerator} tokenGenerator - An anonymous function which returns a signed JWT token.
+   * @param {Number=} refreshInterval - The number of milliseconds which must pass before a new JWT token is generated (zero to prevent refreshes).
    */
 
   class JwtProvider extends Disposable {
-    constructor(generator, interval) {
+    constructor(tokenGenerator, refreshInterval) {
       super();
-      assert.argumentIsRequired(generator, 'generator', Function);
-      assert.argumentIsRequired(interval, 'interval', Number);
-      this._generator = generator;
-      this._interval = interval;
+      assert.argumentIsRequired(tokenGenerator, 'tokenGenerator', Function);
+      assert.argumentIsOptional(refreshInterval, 'refreshInterval', Number);
+      this._tokenGenerator = tokenGenerator;
       this._tokenPromise = null;
-      this._tokenTimestamp = null;
+      this._refreshTimestamp = null;
+      this._refreshPending = false;
+      this._refreshInterval = Math.max(refreshInterval || 0, 0);
+      this._refreshJitter = random.range(0, Math.floor(this._refreshInterval / 10));
       this._scheduler = new Scheduler();
     }
     /**
@@ -542,15 +549,41 @@ module.exports = (() => {
 
     getToken() {
       return Promise.resolve().then(() => {
-        const time = new Date().getTime();
+        if (this._refreshPending) {
+          return this._tokenPromise;
+        }
 
-        if (this._tokenPromise === null || this._timestamp === null || this._tokenTimestamp + this._interval < time) {
-          this._tokenTimestamp = time;
-          this._tokenPromise = this._scheduler.backoff(() => this._generator(), 100, 'Read JWT token', 3);
+        if (this._tokenPromise === null || this._refreshInterval > 0 && getTime() > this._refreshTimestamp + this._refreshInterval + this._refreshJitter) {
+          this._refreshPending = true;
+          this._tokenPromise = this._scheduler.backoff(() => this._tokenGenerator(), 100, 'Read JWT token', 3).then(token => {
+            this._refreshTimestamp = getTime();
+            this._refreshPending = false;
+            return token;
+          }).catch(e => {
+            this._tokenPromise = null;
+            this._refreshTimestamp = null;
+            this._refreshPending = false;
+            return Promise.reject(e);
+          });
         }
 
         return this._tokenPromise;
       });
+    }
+    /**
+     * A factory for {@link JwtProvider} which is an alternative to the constructor.
+     *
+     * @public
+     * @static
+     * @exported
+     * @param {Callbacks.JwtTokenGenerator} tokenGenerator - An anonymous function which returns a signed JWT token.
+     * @param {Number=} refreshInterval - The number of milliseconds which must pass before a new JWT token is generated (zero to prevent refreshes).
+     * @returns {JwtProvider}
+     */
+
+
+    static fromTokenGenerator(tokenGenerator, refreshInterval) {
+      return new JwtProvider(tokenGenerator, refreshInterval);
     }
     /**
      * Builds a {@link JwtProvider} which will generate tokens impersonating the specified
@@ -617,13 +650,17 @@ module.exports = (() => {
       payload.permissions = permissions;
     }
 
-    return new JwtProvider(() => Gateway.invoke(tokenEndpoint, payload), 5 * 60 * 1000);
+    return new JwtProvider(() => Gateway.invoke(tokenEndpoint, payload), DEFAULT_REFRESH_INTERVAL_MILLISECONDS);
+  }
+
+  function getTime() {
+    return new Date().getTime();
   }
 
   return JwtProvider;
 })();
 
-},{"../common/Configuration":2,"@barchart/common-js/api/http/Gateway":9,"@barchart/common-js/api/http/builders/EndpointBuilder":11,"@barchart/common-js/api/http/definitions/ProtocolType":17,"@barchart/common-js/api/http/definitions/VerbType":18,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":24,"@barchart/common-js/lang/Disposable":33,"@barchart/common-js/lang/assert":38,"@barchart/common-js/timing/Scheduler":48}],6:[function(require,module,exports){
+},{"../common/Configuration":2,"@barchart/common-js/api/http/Gateway":9,"@barchart/common-js/api/http/builders/EndpointBuilder":11,"@barchart/common-js/api/http/definitions/ProtocolType":17,"@barchart/common-js/api/http/definitions/VerbType":18,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":24,"@barchart/common-js/lang/Disposable":33,"@barchart/common-js/lang/assert":38,"@barchart/common-js/lang/random":44,"@barchart/common-js/timing/Scheduler":49}],6:[function(require,module,exports){
 const assert = require('./../../lang/assert'),
       is = require('./../../lang/is');
 
@@ -848,7 +885,7 @@ module.exports = (() => {
   return FailureReason;
 })();
 
-},{"./../../collections/Tree":26,"./../../lang/assert":38,"./../../lang/is":41,"./../../serialization/json/Schema":47,"./FailureReasonItem":7,"./FailureType":8}],7:[function(require,module,exports){
+},{"./../../collections/Tree":26,"./../../lang/assert":38,"./../../lang/is":41,"./../../serialization/json/Schema":48,"./FailureReasonItem":7,"./FailureType":8}],7:[function(require,module,exports){
 const assert = require('./../../lang/assert'),
       attributes = require('./../../lang/attributes');
 
@@ -1349,7 +1386,7 @@ module.exports = (() => {
   return Gateway;
 })();
 
-},{"./../../lang/array":37,"./../../lang/assert":38,"./../../lang/attributes":39,"./../../lang/is":41,"./../../lang/promise":43,"./../failures/FailureReason":6,"./../failures/FailureType":8,"./definitions/Endpoint":14,"./definitions/VerbType":18,"axios":49}],10:[function(require,module,exports){
+},{"./../../lang/array":37,"./../../lang/assert":38,"./../../lang/attributes":39,"./../../lang/is":41,"./../../lang/promise":43,"./../failures/FailureReason":6,"./../failures/FailureType":8,"./definitions/Endpoint":14,"./definitions/VerbType":18,"axios":50}],10:[function(require,module,exports){
 const assert = require('./../../../lang/assert');
 
 const Credentials = require('./../definitions/Credentials');
@@ -4882,7 +4919,7 @@ module.exports = (() => {
   return Decimal;
 })();
 
-},{"./Enum":34,"./assert":38,"./is":41,"big.js":75}],33:[function(require,module,exports){
+},{"./Enum":34,"./assert":38,"./is":41,"big.js":76}],33:[function(require,module,exports){
 const assert = require('./assert');
 
 module.exports = (() => {
@@ -5357,7 +5394,7 @@ module.exports = (() => {
   return Timestamp;
 })();
 
-},{"./assert":38,"./is":41,"moment-timezone":78}],37:[function(require,module,exports){
+},{"./assert":38,"./is":41,"moment-timezone":79}],37:[function(require,module,exports){
 const assert = require('./assert'),
       is = require('./is');
 
@@ -6732,6 +6769,32 @@ module.exports = (() => {
 })();
 
 },{"./assert":38}],44:[function(require,module,exports){
+const assert = require('./assert');
+
+module.exports = (() => {
+  'use strict';
+
+  return {
+    /**
+     * Returns a random integer within a given range.
+     *
+     * @public
+     * @param {Number} minimum - The minimum value (inclusive).
+     * @param {Number} maximum - The maximum value (exclusive).
+     * @returns {Number}
+     */
+    range(minimum, maximum) {
+      assert.argumentIsRequired(minimum, 'minimum', Number);
+      assert.argumentIsRequired(maximum, 'maximum', Number);
+      const mn = Math.trunc(minimum);
+      const mx = Math.trunc(maximum);
+      return Math.min(mn, mx) + Math.floor(Math.random() * Math.abs(mx - mn));
+    }
+
+  };
+})();
+
+},{"./assert":38}],45:[function(require,module,exports){
 const Currency = require('./../../lang/Currency'),
       Money = require('./../../lang/Money');
 
@@ -6807,7 +6870,7 @@ module.exports = (() => {
   return Component;
 })();
 
-},{"./../../lang/Currency":30,"./../../lang/Money":35,"./DataType":45,"./Field":46}],45:[function(require,module,exports){
+},{"./../../lang/Currency":30,"./../../lang/Money":35,"./DataType":46,"./Field":47}],46:[function(require,module,exports){
 const moment = require('moment');
 
 const AdHoc = require('./../../lang/AdHoc'),
@@ -7123,7 +7186,7 @@ module.exports = (() => {
   return DataType;
 })();
 
-},{"./../../lang/AdHoc":29,"./../../lang/Day":31,"./../../lang/Decimal":32,"./../../lang/Enum":34,"./../../lang/Timestamp":36,"./../../lang/assert":38,"./../../lang/is":41,"moment":80}],46:[function(require,module,exports){
+},{"./../../lang/AdHoc":29,"./../../lang/Day":31,"./../../lang/Decimal":32,"./../../lang/Enum":34,"./../../lang/Timestamp":36,"./../../lang/assert":38,"./../../lang/is":41,"moment":81}],47:[function(require,module,exports){
 module.exports = (() => {
   'use strict';
   /**
@@ -7184,7 +7247,7 @@ module.exports = (() => {
   return Field;
 })();
 
-},{}],47:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 const attributes = require('./../../lang/attributes'),
       functions = require('./../../lang/functions'),
       is = require('./../../lang/is');
@@ -7507,7 +7570,7 @@ module.exports = (() => {
   return Schema;
 })();
 
-},{"./../../collections/LinkedList":25,"./../../collections/Tree":26,"./../../lang/attributes":39,"./../../lang/functions":40,"./../../lang/is":41,"./Component":44,"./Field":46}],48:[function(require,module,exports){
+},{"./../../collections/LinkedList":25,"./../../collections/Tree":26,"./../../lang/attributes":39,"./../../lang/functions":40,"./../../lang/is":41,"./Component":45,"./Field":47}],49:[function(require,module,exports){
 const assert = require('./../lang/assert'),
       Disposable = require('./../lang/Disposable'),
       is = require('./../lang/is'),
@@ -7713,9 +7776,9 @@ module.exports = (() => {
   return Scheduler;
 })();
 
-},{"./../lang/Disposable":33,"./../lang/assert":38,"./../lang/is":41,"./../lang/object":42,"./../lang/promise":43}],49:[function(require,module,exports){
+},{"./../lang/Disposable":33,"./../lang/assert":38,"./../lang/is":41,"./../lang/object":42,"./../lang/promise":43}],50:[function(require,module,exports){
 module.exports = require('./lib/axios');
-},{"./lib/axios":51}],50:[function(require,module,exports){
+},{"./lib/axios":52}],51:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -7897,7 +7960,7 @@ module.exports = function xhrAdapter(config) {
   });
 };
 
-},{"../core/buildFullPath":57,"../core/createError":58,"./../core/settle":62,"./../helpers/buildURL":66,"./../helpers/cookies":68,"./../helpers/isURLSameOrigin":70,"./../helpers/parseHeaders":72,"./../utils":74}],51:[function(require,module,exports){
+},{"../core/buildFullPath":58,"../core/createError":59,"./../core/settle":63,"./../helpers/buildURL":67,"./../helpers/cookies":69,"./../helpers/isURLSameOrigin":71,"./../helpers/parseHeaders":73,"./../utils":75}],52:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -7952,7 +8015,7 @@ module.exports = axios;
 // Allow use of default import syntax in TypeScript
 module.exports.default = axios;
 
-},{"./cancel/Cancel":52,"./cancel/CancelToken":53,"./cancel/isCancel":54,"./core/Axios":55,"./core/mergeConfig":61,"./defaults":64,"./helpers/bind":65,"./helpers/spread":73,"./utils":74}],52:[function(require,module,exports){
+},{"./cancel/Cancel":53,"./cancel/CancelToken":54,"./cancel/isCancel":55,"./core/Axios":56,"./core/mergeConfig":62,"./defaults":65,"./helpers/bind":66,"./helpers/spread":74,"./utils":75}],53:[function(require,module,exports){
 'use strict';
 
 /**
@@ -7973,7 +8036,7 @@ Cancel.prototype.__CANCEL__ = true;
 
 module.exports = Cancel;
 
-},{}],53:[function(require,module,exports){
+},{}],54:[function(require,module,exports){
 'use strict';
 
 var Cancel = require('./Cancel');
@@ -8032,14 +8095,14 @@ CancelToken.source = function source() {
 
 module.exports = CancelToken;
 
-},{"./Cancel":52}],54:[function(require,module,exports){
+},{"./Cancel":53}],55:[function(require,module,exports){
 'use strict';
 
 module.exports = function isCancel(value) {
   return !!(value && value.__CANCEL__);
 };
 
-},{}],55:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8135,7 +8198,7 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 
 module.exports = Axios;
 
-},{"../helpers/buildURL":66,"./../utils":74,"./InterceptorManager":56,"./dispatchRequest":59,"./mergeConfig":61}],56:[function(require,module,exports){
+},{"../helpers/buildURL":67,"./../utils":75,"./InterceptorManager":57,"./dispatchRequest":60,"./mergeConfig":62}],57:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8189,7 +8252,7 @@ InterceptorManager.prototype.forEach = function forEach(fn) {
 
 module.exports = InterceptorManager;
 
-},{"./../utils":74}],57:[function(require,module,exports){
+},{"./../utils":75}],58:[function(require,module,exports){
 'use strict';
 
 var isAbsoluteURL = require('../helpers/isAbsoluteURL');
@@ -8211,7 +8274,7 @@ module.exports = function buildFullPath(baseURL, requestedURL) {
   return requestedURL;
 };
 
-},{"../helpers/combineURLs":67,"../helpers/isAbsoluteURL":69}],58:[function(require,module,exports){
+},{"../helpers/combineURLs":68,"../helpers/isAbsoluteURL":70}],59:[function(require,module,exports){
 'use strict';
 
 var enhanceError = require('./enhanceError');
@@ -8231,7 +8294,7 @@ module.exports = function createError(message, config, code, request, response) 
   return enhanceError(error, config, code, request, response);
 };
 
-},{"./enhanceError":60}],59:[function(require,module,exports){
+},{"./enhanceError":61}],60:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8312,7 +8375,7 @@ module.exports = function dispatchRequest(config) {
   });
 };
 
-},{"../cancel/isCancel":54,"../defaults":64,"./../utils":74,"./transformData":63}],60:[function(require,module,exports){
+},{"../cancel/isCancel":55,"../defaults":65,"./../utils":75,"./transformData":64}],61:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8356,7 +8419,7 @@ module.exports = function enhanceError(error, config, code, request, response) {
   return error;
 };
 
-},{}],61:[function(require,module,exports){
+},{}],62:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -8431,7 +8494,7 @@ module.exports = function mergeConfig(config1, config2) {
   return config;
 };
 
-},{"../utils":74}],62:[function(require,module,exports){
+},{"../utils":75}],63:[function(require,module,exports){
 'use strict';
 
 var createError = require('./createError');
@@ -8458,7 +8521,7 @@ module.exports = function settle(resolve, reject, response) {
   }
 };
 
-},{"./createError":58}],63:[function(require,module,exports){
+},{"./createError":59}],64:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8480,7 +8543,7 @@ module.exports = function transformData(data, headers, fns) {
   return data;
 };
 
-},{"./../utils":74}],64:[function(require,module,exports){
+},{"./../utils":75}],65:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -8581,7 +8644,7 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 module.exports = defaults;
 
 }).call(this,require('_process'))
-},{"./adapters/http":50,"./adapters/xhr":50,"./helpers/normalizeHeaderName":71,"./utils":74,"_process":76}],65:[function(require,module,exports){
+},{"./adapters/http":51,"./adapters/xhr":51,"./helpers/normalizeHeaderName":72,"./utils":75,"_process":77}],66:[function(require,module,exports){
 'use strict';
 
 module.exports = function bind(fn, thisArg) {
@@ -8594,7 +8657,7 @@ module.exports = function bind(fn, thisArg) {
   };
 };
 
-},{}],66:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8667,7 +8730,7 @@ module.exports = function buildURL(url, params, paramsSerializer) {
   return url;
 };
 
-},{"./../utils":74}],67:[function(require,module,exports){
+},{"./../utils":75}],68:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8683,7 +8746,7 @@ module.exports = function combineURLs(baseURL, relativeURL) {
     : baseURL;
 };
 
-},{}],68:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8738,7 +8801,7 @@ module.exports = (
     })()
 );
 
-},{"./../utils":74}],69:[function(require,module,exports){
+},{"./../utils":75}],70:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8754,7 +8817,7 @@ module.exports = function isAbsoluteURL(url) {
   return /^([a-z][a-z\d\+\-\.]*:)?\/\//i.test(url);
 };
 
-},{}],70:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8824,7 +8887,7 @@ module.exports = (
     })()
 );
 
-},{"./../utils":74}],71:[function(require,module,exports){
+},{"./../utils":75}],72:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -8838,7 +8901,7 @@ module.exports = function normalizeHeaderName(headers, normalizedName) {
   });
 };
 
-},{"../utils":74}],72:[function(require,module,exports){
+},{"../utils":75}],73:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8893,7 +8956,7 @@ module.exports = function parseHeaders(headers) {
   return parsed;
 };
 
-},{"./../utils":74}],73:[function(require,module,exports){
+},{"./../utils":75}],74:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8922,7 +8985,7 @@ module.exports = function spread(callback) {
   };
 };
 
-},{}],74:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 'use strict';
 
 var bind = require('./helpers/bind');
@@ -9268,7 +9331,7 @@ module.exports = {
   trim: trim
 };
 
-},{"./helpers/bind":65}],75:[function(require,module,exports){
+},{"./helpers/bind":66}],76:[function(require,module,exports){
 /*
  *  big.js v5.2.2
  *  A small, fast, easy-to-use library for arbitrary-precision decimal arithmetic.
@@ -10211,7 +10274,7 @@ module.exports = {
   }
 })(this);
 
-},{}],76:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -10397,7 +10460,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],77:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 module.exports={
 	"version": "2019b",
 	"zones": [
@@ -10998,11 +11061,11 @@ module.exports={
 		"Pacific/Tarawa|Pacific/Wallis"
 	]
 }
-},{}],78:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 var moment = module.exports = require("./moment-timezone");
 moment.tz.load(require('./data/packed/latest.json'));
 
-},{"./data/packed/latest.json":77,"./moment-timezone":79}],79:[function(require,module,exports){
+},{"./data/packed/latest.json":78,"./moment-timezone":80}],80:[function(require,module,exports){
 //! moment-timezone.js
 //! version : 0.5.26
 //! Copyright (c) JS Foundation and other contributors
@@ -11631,7 +11694,7 @@ moment.tz.load(require('./data/packed/latest.json'));
 	return moment;
 }));
 
-},{"moment":80}],80:[function(require,module,exports){
+},{"moment":81}],81:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
