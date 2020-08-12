@@ -20,10 +20,11 @@
     * _instance_
         * [.getToken()](#JwtProvidergetToken) ⇒ <code>Promise.&lt;String&gt;</code>
     * _static_
+        * [.fromTokenGenerator(tokenGenerator, [refreshInterval])](#JwtProviderfromTokenGenerator) ⇒ [<code>JwtProvider</code>](#JwtProvider)
         * [.forTest(userId, contextId, [permissions])](#JwtProviderforTest) ⇒ [<code>JwtProvider</code>](#JwtProvider)
         * [.forDevelopment(userId, contextId, [permissions])](#JwtProviderforDevelopment) ⇒ [<code>JwtProvider</code>](#JwtProvider)
     * _constructor_
-        * [new JwtProvider(generator, interval)](#new_JwtProvider_new)
+        * [new JwtProvider(tokenGenerator, [refreshInterval])](#new_JwtProvider_new)
 
 
 * * *
@@ -34,6 +35,23 @@
 **Kind**: instance method of [<code>JwtProvider</code>](#JwtProvider)  
 **Returns**: <code>Promise.&lt;String&gt;</code>  
 **Access**: public  
+
+* * *
+
+### JwtProvider.fromTokenGenerator(tokenGenerator, [refreshInterval]) :id=jwtproviderfromtokengenerator
+> <p>A factory for [JwtProvider](/content/sdk/lib-security?id=jwtprovider) which is an alternative to the constructor.</p>
+
+**Kind**: static method of [<code>JwtProvider</code>](#JwtProvider)  
+**Returns**: [<code>JwtProvider</code>](#JwtProvider)  
+**Access**: public  
+**Import**: @barchart/user-configuration-client-js/lib/security/JwtProvider  
+**File**: /lib/security/JwtProvider.js  
+
+| Param | Type | Description |
+| --- | --- | --- |
+| tokenGenerator | [<code>JwtTokenGenerator</code>](#CallbacksJwtTokenGenerator) | <p>An anonymous function which returns a signed JWT token.</p> |
+| [refreshInterval] | <code>Number</code> | <p>The number of milliseconds which must pass before a new JWT token is generated (zero to prevent refreshes).</p> |
+
 
 * * *
 
@@ -75,13 +93,13 @@
 
 * * *
 
-### new JwtProvider(generator, interval) :id=new_jwtprovider_new
+### new JwtProvider(tokenGenerator, [refreshInterval]) :id=new_jwtprovider_new
 **Kind**: constructor of [<code>JwtProvider</code>](#JwtProvider)  
 
 | Param | Type | Description |
 | --- | --- | --- |
-| generator | [<code>JwtTokenGenerator</code>](#CallbacksJwtTokenGenerator) | <p>An anonymous function which returns a signed JWT token.</p> |
-| interval | <code>Number</code> | <p>The number of milliseconds which must pass before a new JWT token is generated.</p> |
+| tokenGenerator | [<code>JwtTokenGenerator</code>](#CallbacksJwtTokenGenerator) | <p>An anonymous function which returns a signed JWT token.</p> |
+| [refreshInterval] | <code>Number</code> | <p>The number of milliseconds which must pass before a new JWT token is generated (zero to prevent refreshes).</p> |
 
 
 * * *

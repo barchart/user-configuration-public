@@ -1,5 +1,14 @@
 # Release Notes
 
+## 2.1.0
+**New Features**
+
+* Added static factory function for ```JwtProvider``` class.
+
+**Other**
+
+* Improved refresh logic for JWT.
+
 ## 2.0.0
 **Initial Public Release**
 

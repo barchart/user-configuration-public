@@ -12,6 +12,7 @@
         * [.connect(jwtProvider)](#UserConfigurationGatewayconnect) ⇒ [<code>Promise.&lt;UserConfigurationGateway&gt;</code>](#UserConfigurationGateway)
         * [.readConfiguration()](#UserConfigurationGatewayreadConfiguration) ⇒ [<code>Promise.&lt;Schema.UserConfiguration&gt;</code>](/content/sdk/lib-data?id=schemauserconfiguration)
         * [.writeConfiguration(data)](#UserConfigurationGatewaywriteConfiguration) ⇒ [<code>Promise.&lt;Schema.UserConfiguration&gt;</code>](/content/sdk/lib-data?id=schemauserconfiguration)
+        * [.readServiceMetadata()](#UserConfigurationGatewayreadServiceMetadata) ⇒ [<code>Promise.&lt;Schema.UserConfigurationServiceMetadata&gt;</code>](/content/sdk/lib-data?id=schemauserconfigurationservicemetadata)
     * _static_
         * [.forTest(jwtProvider)](#UserConfigurationGatewayforTest) ⇒ [<code>Promise.&lt;UserConfigurationGateway&gt;</code>](#UserConfigurationGateway)
         * [.forDevelopment(jwtProvider)](#UserConfigurationGatewayforDevelopment) ⇒ [<code>Promise.&lt;UserConfigurationGateway&gt;</code>](#UserConfigurationGateway)
@@ -69,6 +70,15 @@
 | --- | --- |
 | data | [<code>Schema.UserConfiguration</code>](/content/sdk/lib-data?id=schemauserconfiguration) | 
 
+
+* * *
+
+### userConfigurationGateway.readServiceMetadata() :id=userconfigurationgatewayreadservicemetadata
+> <p>Retrieves information regarding the remote service (e.g. version number, current user identifier, etc).</p>
+
+**Kind**: instance method of [<code>UserConfigurationGateway</code>](#UserConfigurationGateway)  
+**Returns**: [<code>Promise.&lt;Schema.UserConfigurationServiceMetadata&gt;</code>](/content/sdk/lib-data?id=schemauserconfigurationservicemetadata)  
+**Access**: public  
 
 * * *
 
