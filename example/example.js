@@ -494,13 +494,14 @@ module.exports = (() => {
 
   return {
     UserConfigurationGateway: UserConfigurationGateway,
-    version: '2.1.1'
+    version: '2.1.2'
   };
 })();
 
 },{"./gateway/UserConfigurationGateway":3}],5:[function(require,module,exports){
 const assert = require('@barchart/common-js/lang/assert'),
       Disposable = require('@barchart/common-js/lang/Disposable'),
+      is = require('@barchart/common-js/lang/is'),
       random = require('@barchart/common-js/lang/random'),
       Scheduler = require('@barchart/common-js/timing/Scheduler');
 
@@ -523,7 +524,7 @@ module.exports = (() => {
    * @public
    * @exported
    * @param {Callbacks.JwtTokenGenerator} tokenGenerator - An anonymous function which returns a signed JWT token.
-   * @param {Number=} refreshInterval - The number of milliseconds which must pass before a new JWT token is generated (zero to prevent refreshes).
+   * @param {Number=} refreshInterval - The number of milliseconds which must pass before a new JWT token is generated. A zero value means the token should never be refreshed. A null or undefined value means the token is not cached.
    */
 
   class JwtProvider extends Disposable {
@@ -535,8 +536,15 @@ module.exports = (() => {
       this._tokenPromise = null;
       this._refreshTimestamp = null;
       this._refreshPending = false;
-      this._refreshInterval = Math.max(refreshInterval || 0, 0);
-      this._refreshJitter = random.range(0, Math.floor(this._refreshInterval / 10));
+
+      if (is.number(refreshInterval)) {
+        this._refreshInterval = Math.max(refreshInterval || 0, 0);
+        this._refreshJitter = random.range(0, Math.floor(this._refreshInterval / 10));
+      } else {
+        this._refreshInterval = null;
+        this._refreshJitter = null;
+      }
+
       this._scheduler = new Scheduler();
     }
     /**
@@ -553,7 +561,7 @@ module.exports = (() => {
           return this._tokenPromise;
         }
 
-        if (this._tokenPromise === null || this._refreshInterval > 0 && getTime() > this._refreshTimestamp + this._refreshInterval + this._refreshJitter) {
+        if (this._tokenPromise === null || this._refreshInterval === null || this._refreshInterval > 0 && getTime() > this._refreshTimestamp + this._refreshInterval + this._refreshJitter) {
           this._refreshPending = true;
           this._tokenPromise = this._scheduler.backoff(() => this._tokenGenerator(), 100, 'Read JWT token', 3).then(token => {
             this._refreshTimestamp = getTime();
@@ -577,7 +585,7 @@ module.exports = (() => {
      * @static
      * @exported
      * @param {Callbacks.JwtTokenGenerator} tokenGenerator - An anonymous function which returns a signed JWT token.
-     * @param {Number=} refreshInterval - The number of milliseconds which must pass before a new JWT token is generated (zero to prevent refreshes).
+     * @param {Number=} refreshInterval - The number of milliseconds which must pass before a new JWT token is generated. A zero value means the token should never be refreshed. A null or undefined value means the token is not cached.
      * @returns {JwtProvider}
      */
 
@@ -660,7 +668,7 @@ module.exports = (() => {
   return JwtProvider;
 })();
 
-},{"../common/Configuration":2,"@barchart/common-js/api/http/Gateway":9,"@barchart/common-js/api/http/builders/EndpointBuilder":11,"@barchart/common-js/api/http/definitions/ProtocolType":17,"@barchart/common-js/api/http/definitions/VerbType":18,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":24,"@barchart/common-js/lang/Disposable":33,"@barchart/common-js/lang/assert":38,"@barchart/common-js/lang/random":44,"@barchart/common-js/timing/Scheduler":49}],6:[function(require,module,exports){
+},{"../common/Configuration":2,"@barchart/common-js/api/http/Gateway":9,"@barchart/common-js/api/http/builders/EndpointBuilder":11,"@barchart/common-js/api/http/definitions/ProtocolType":17,"@barchart/common-js/api/http/definitions/VerbType":18,"@barchart/common-js/api/http/interceptors/ResponseInterceptor":24,"@barchart/common-js/lang/Disposable":33,"@barchart/common-js/lang/assert":38,"@barchart/common-js/lang/is":41,"@barchart/common-js/lang/random":44,"@barchart/common-js/timing/Scheduler":49}],6:[function(require,module,exports){
 const assert = require('./../../lang/assert'),
       is = require('./../../lang/is');
 
