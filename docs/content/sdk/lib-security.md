@@ -50,7 +50,7 @@
 | Param | Type | Description |
 | --- | --- | --- |
 | tokenGenerator | [<code>JwtTokenGenerator</code>](#CallbacksJwtTokenGenerator) | <p>An anonymous function which returns a signed JWT token.</p> |
-| [refreshInterval] | <code>Number</code> | <p>The number of milliseconds which must pass before a new JWT token is generated (zero to prevent refreshes).</p> |
+| [refreshInterval] | <code>Number</code> | <p>The number of milliseconds which must pass before a new JWT token is generated. A zero value means the token should never be refreshed. A null or undefined value means the token is not cached.</p> |
 
 
 * * *
@@ -99,7 +99,7 @@
 | Param | Type | Description |
 | --- | --- | --- |
 | tokenGenerator | [<code>JwtTokenGenerator</code>](#CallbacksJwtTokenGenerator) | <p>An anonymous function which returns a signed JWT token.</p> |
-| [refreshInterval] | <code>Number</code> | <p>The number of milliseconds which must pass before a new JWT token is generated (zero to prevent refreshes).</p> |
+| [refreshInterval] | <code>Number</code> | <p>The number of milliseconds which must pass before a new JWT token is generated. A zero value means the token should never be refreshed. A null or undefined value means the token is not cached.</p> |
 
 
 * * *
