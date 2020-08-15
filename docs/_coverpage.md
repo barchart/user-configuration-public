@@ -1,4 +1,4 @@
-# @barchart/user-configuration-client-js <small>2.1.2</small>
+# @barchart/user-configuration-client-js <small>2.2.0</small>
 
 > JavaScript SDK for Barchart&#x27;s User Preference Service
 

@@ -494,7 +494,7 @@ module.exports = (() => {
 
   return {
     UserConfigurationGateway: UserConfigurationGateway,
-    version: '2.1.2'
+    version: '2.2.0'
   };
 })();
 
@@ -629,6 +629,23 @@ module.exports = (() => {
 
     static forDevelopment(userId, contextId, permissions) {
       return getJwtProviderForImpersonation(Configuration.getJwtImpersonationHost, 'dev', userId, contextId, permissions);
+    }
+    /**
+     * Builds a {@link JwtProvider} which will generate tokens impersonating the specified
+     * user. The "admin" environment is for Barchart use only and access is restricted
+     * to Barchart's internal network.
+     *
+     * @public
+     * @static
+     * @param {String} userId - The user identifier to impersonate.
+     * @param {String} contextId - The context identifier of the user to impersonate.
+     * @param {String=} permissions - The desired permission level.
+     * @returns {JwtProvider}
+     */
+
+
+    static forAdmin(userId, contextId, permissions) {
+      return getJwtProviderForImpersonation(Configuration.getJwtImpersonationHost, 'admin', userId, contextId, permissions);
     }
 
     _onDispose() {
