@@ -1,5 +1,10 @@
 # Release Notes
 
+## 2.2.0
+**New Features**
+
+* Added ```JwtProvider.forAdmin``` function.
+
 ## 2.1.0
 **New Features**
 

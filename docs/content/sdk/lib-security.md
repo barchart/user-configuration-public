@@ -23,6 +23,7 @@
         * [.fromTokenGenerator(tokenGenerator, [refreshInterval])](#JwtProviderfromTokenGenerator) ⇒ [<code>JwtProvider</code>](#JwtProvider)
         * [.forTest(userId, contextId, [permissions])](#JwtProviderforTest) ⇒ [<code>JwtProvider</code>](#JwtProvider)
         * [.forDevelopment(userId, contextId, [permissions])](#JwtProviderforDevelopment) ⇒ [<code>JwtProvider</code>](#JwtProvider)
+        * [.forAdmin(userId, contextId, [permissions])](#JwtProviderforAdmin) ⇒ [<code>JwtProvider</code>](#JwtProvider)
     * _constructor_
         * [new JwtProvider(tokenGenerator, [refreshInterval])](#new_JwtProvider_new)
 
@@ -78,6 +79,24 @@
 ### JwtProvider.forDevelopment(userId, contextId, [permissions]) :id=jwtproviderfordevelopment
 > <p>Builds a [JwtProvider](/content/sdk/lib-security?id=jwtprovider) which will generate tokens impersonating the specified
 > user. The &quot;development&quot; environment is for Barchart use only and access is restricted
+> to Barchart's internal network.</p>
+
+**Kind**: static method of [<code>JwtProvider</code>](#JwtProvider)  
+**Returns**: [<code>JwtProvider</code>](#JwtProvider)  
+**Access**: public  
+
+| Param | Type | Description |
+| --- | --- | --- |
+| userId | <code>String</code> | <p>The user identifier to impersonate.</p> |
+| contextId | <code>String</code> | <p>The context identifier of the user to impersonate.</p> |
+| [permissions] | <code>String</code> | <p>The desired permission level.</p> |
+
+
+* * *
+
+### JwtProvider.forAdmin(userId, contextId, [permissions]) :id=jwtproviderforadmin
+> <p>Builds a [JwtProvider](/content/sdk/lib-security?id=jwtprovider) which will generate tokens impersonating the specified
+> user. The &quot;admin&quot; environment is for Barchart use only and access is restricted
 > to Barchart's internal network.</p>
 
 **Kind**: static method of [<code>JwtProvider</code>](#JwtProvider)  
