@@ -195,6 +195,18 @@ module.exports = (() => {
       return 'user-configuration-demo.aws.barchart.com';
     }
     /**
+     * The hostname of the REST API for the admin environment.
+     *
+     * @public
+     * @static
+     * @returns {String}
+     */
+
+
+    static get adminHost() {
+      return 'sgv9jp8b78.execute-api.us-east-1.amazonaws.com/admin';
+    }
+    /**
      * The hostname of the REST API for the production environment (public use allowed).
      *
      * @public
@@ -441,6 +453,22 @@ module.exports = (() => {
       });
     }
     /**
+     * Creates and starts a new {@link UserConfigurationGateway} for use in the private admin environment.
+     *
+     * @public
+     * @static
+     * @param {JwtProvider} jwtProvider
+     * @returns {Promise<UserConfigurationGateway>}
+     */
+
+
+    static forAdmin(jwtProvider) {
+      return Promise.resolve().then(() => {
+        assert.argumentIsRequired(jwtProvider, 'jwtProvider', JwtProvider, 'JwtProvider');
+        return start(new UserConfigurationGateway(REST_API_SECURE_PROTOCOL, Configuration.adminHost, REST_API_SECURE_PORT, 'admin'), jwtProvider);
+      });
+    }
+    /**
      * Creates and starts a new {@link UserConfigurationGateway} for use in the public production environment.
      *
      * @public
@@ -494,7 +522,7 @@ module.exports = (() => {
 
   return {
     UserConfigurationGateway: UserConfigurationGateway,
-    version: '2.2.0'
+    version: '2.3.0'
   };
 })();
 
