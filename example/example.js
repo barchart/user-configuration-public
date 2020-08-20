@@ -204,7 +204,7 @@ module.exports = (() => {
 
 
     static get adminHost() {
-      return 'sgv9jp8b78.execute-api.us-east-1.amazonaws.com/admin';
+      return 'user-configuration-admin.aws.barchart.com';
     }
     /**
      * The hostname of the REST API for the production environment (public use allowed).
@@ -522,7 +522,7 @@ module.exports = (() => {
 
   return {
     UserConfigurationGateway: UserConfigurationGateway,
-    version: '2.3.0'
+    version: '2.3.1'
   };
 })();
 
