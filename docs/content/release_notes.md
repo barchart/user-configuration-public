@@ -1,5 +1,17 @@
 # Release Notes
 
+## 2.3.2
+**Technical Enhancements**
+
+* Updated `barchart/common-js` to the v4.9.0.
+* Updated `gulp` script.
+
+## 2.3.1
+**Other**
+
+* Updated hostname for _admin_ environment.
+
+
 ## 2.2.0
 **New Features**
 
