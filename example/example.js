@@ -522,7 +522,7 @@ module.exports = (() => {
 
   return {
     UserConfigurationGateway: UserConfigurationGateway,
-    version: '2.3.1'
+    version: '2.3.2'
   };
 })();
 
@@ -783,10 +783,15 @@ module.exports = (() => {
 
     format() {
       const reasons = this._head.toJSObj(item => {
-        return {
-          code: item ? item.type.code : null,
-          message: item ? item.format(this._data) : null
-        };
+        const formatted = {};
+        formatted.code = item ? item.type.code : null;
+        formatted.message = item ? item.format(this._data) : null;
+
+        if (item && item.type.verbose) {
+          formatted.data = item.data;
+        }
+
+        return formatted;
       });
 
       return reasons.children;
@@ -838,6 +843,19 @@ module.exports = (() => {
 
     toJSON() {
       return this.format();
+    }
+    /**
+     * @public
+     * @static
+     * @param {FailureType} type
+     * @param {Object=} data
+     * @returns {FailureReason}
+     */
+
+
+    static from(type, data) {
+      const reason = new FailureReason();
+      return reason.addItem(type, data);
     }
     /**
      * Factory function for creating instances of {@link FailureReason}.
@@ -973,6 +991,17 @@ module.exports = (() => {
       return this._type;
     }
     /**
+     * The data.
+     *
+     * @public
+     * @return {Object}
+     */
+
+
+    get data() {
+      return this._data;
+    }
+    /**
      * Formats a human-readable message, describing the failure.
      *
      * @public
@@ -1040,14 +1069,16 @@ module.exports = (() => {
    * @param {String} template - The template string for formatting human-readable messages.
    * @param {Boolean=} severe - Indicates if the failure is severe (default is true).
    * @param {Number=} error - The HTTP error code which should be used as part of an HTTP response.
+   * @param {Boolean=} verbose - Indicates if data object should be included when serialized.
    */
 
   class FailureType extends Enum {
-    constructor(code, template, severe, error) {
+    constructor(code, template, severe, error, verbose) {
       super(code, code);
       assert.argumentIsRequired(template, 'template', String);
       assert.argumentIsOptional(severe, 'severe', Boolean);
       assert.argumentIsOptional(error, 'error', Number);
+      assert.argumentIsOptional(verbose, 'verbose', Boolean);
       this._template = template;
 
       if (is.boolean(severe)) {
@@ -1057,6 +1088,7 @@ module.exports = (() => {
       }
 
       this._error = error || null;
+      this._verbose = verbose || false;
     }
     /**
      * The template string for formatting human-readable messages.
@@ -1090,6 +1122,17 @@ module.exports = (() => {
 
     get error() {
       return this._error;
+    }
+    /**
+     * Indicates if data object should be included when serialized.
+     *
+     * @public
+     * @return {boolean}
+     */
+
+
+    get verbose() {
+      return this._verbose;
     }
     /**
      * One or more data points is missing.
@@ -1188,6 +1231,18 @@ module.exports = (() => {
       return requestGeneralFailure;
     }
     /**
+     * Insufficient permission level to access the resource.
+     *
+     * @public
+     * @static
+     * @returns {FailureType}
+     */
+
+
+    static get ENTITLEMENTS_FAILED() {
+      return entitlementsFailed;
+    }
+    /**
      * Returns an HTTP status code that would be suitable for use with the
      * failure type.
      *
@@ -1227,6 +1282,7 @@ module.exports = (() => {
   const requestInputMalformed = new FailureType('REQUEST_INPUT_MALFORMED', 'An attempt to {L|root.endpoint.description} failed, the data structure is invalid.');
   const schemaValidationFailure = new FailureType('SCHEMA_VALIDATION_FAILURE', 'An attempt to read {U|schema} data failed (found "{L|key}" when expecting "{L|name}")');
   const requestGeneralFailure = new FailureType('REQUEST_GENERAL_FAILURE', 'An attempt to {L|root.endpoint.description} failed for unspecified reason(s).');
+  const entitlementsFailed = new FailureType('ENTITLEMENTS_FAILED', 'Action blocked. The current user requires elevated permissions or the current user has exceeded a quota.', false, 403, true);
   return FailureType;
 })();
 
@@ -3253,6 +3309,17 @@ module.exports = (() => {
       return this._children.length === 0;
     }
     /**
+     * Returns true if this node has children; otherwise false.
+     *
+     * @public
+     * @returns {boolean}
+     */
+
+
+    getIsInner() {
+      return this._children.length !== 0;
+    }
+    /**
      * Returns true if this node has no parent; otherwise false.
      *
      * @public
@@ -3390,6 +3457,20 @@ module.exports = (() => {
       };
 
       this.search(predicate, parentFirst, includeCurrentNode);
+    }
+    /**
+     * Returns the count of all descendant nodes by walking the tree. Consequently, this
+     * function is not efficient.
+     *
+     * @public
+     * @returns {Number}
+     */
+
+
+    count() {
+      let count = 0;
+      this.walk(() => count++, true, true);
+      return count;
     }
     /**
      * Climbs the parents of the current node -- current node up to the root node, running an action on each node.
@@ -3625,6 +3706,7 @@ module.exports = (() => {
     /**
      * Compares two dates (in ascending order).
      *
+     * @public
      * @static
      * @param {Date} a
      * @param {Date} b
@@ -3639,6 +3721,7 @@ module.exports = (() => {
     /**
      * Compares two numbers (in ascending order).
      *
+     * @public
      * @static
      * @param {Number} a
      * @param {Number} b
@@ -3653,6 +3736,7 @@ module.exports = (() => {
     /**
      * Compares two strings (in ascending order), using {@link String#localeCompare}.
      *
+     * @public
      * @static
      * @param {String} a
      * @param {String} b
@@ -3667,6 +3751,7 @@ module.exports = (() => {
     /**
      * Compares two boolean values (in ascending order -- false first, true second).
      *
+     * @public
      * @static
      * @param {Boolean} a
      * @param {Boolean} b
@@ -3688,6 +3773,7 @@ module.exports = (() => {
     /**
      * Compares two objects, always returning zero.
      *
+     * @public
      * @static
      * @param {*} a
      * @param {*} b
@@ -4972,7 +5058,7 @@ module.exports = (() => {
   return Decimal;
 })();
 
-},{"./Enum":34,"./assert":38,"./is":41,"big.js":76}],33:[function(require,module,exports){
+},{"./Enum":34,"./assert":38,"./is":41,"big.js":77}],33:[function(require,module,exports){
 const assert = require('./assert');
 
 module.exports = (() => {
@@ -4981,7 +5067,6 @@ module.exports = (() => {
    * An object that has an end-of-life process.
    *
    * @public
-   * @interface
    */
 
   class Disposable {
@@ -5036,7 +5121,7 @@ module.exports = (() => {
      * delegated to a function.
      *
      * @public
-     * @param disposeAction {Function}
+     * @param {Function} disposeAction
      * @returns {Disposable}
      */
 
@@ -5390,6 +5475,42 @@ module.exports = (() => {
       return this.add(seconds * MILLISECONDS_PER_SECOND);
     }
     /**
+     * Indicates if another {@link Timestamp} occurs before the current instance.
+     *
+     * @public
+     * @param {Timestamp} other
+     * @returns {boolean}
+     */
+
+
+    getIsBefore(other) {
+      return Timestamp.compareTimestamps(this, other) < 0;
+    }
+    /**
+     * Indicates if another {@link Timestamp} occurs after the current instance.
+     *
+     * @public
+     * @param {Timestamp} other
+     * @returns {boolean}
+     */
+
+
+    getIsAfter(other) {
+      return Timestamp.compareTimestamps(this, other) > 0;
+    }
+    /**
+     * Indicates if another {@link Timestamp} occurs after the current instance.
+     *
+     * @public
+     * @param {Timestamp} other
+     * @returns {boolean}
+     */
+
+
+    getIsEqual(other) {
+      return Timestamp.compareTimestamps(this, other) === 0;
+    }
+    /**
      * Returns the JSON representation.
      *
      * @public
@@ -5437,6 +5558,22 @@ module.exports = (() => {
     static now() {
       return new Timestamp(new Date().getTime());
     }
+    /**
+     * A comparator function for {@link Day} instances.
+     *
+     * @public
+     * @static
+     * @param {Timestamp} a
+     * @param {Timestamp} b
+     * @returns {Number}
+     */
+
+
+    static compareTimestamps(a, b) {
+      assert.argumentIsRequired(a, 'a', Timestamp, 'Timestamp');
+      assert.argumentIsRequired(b, 'b', Timestamp, 'Timestamp');
+      return a.timestamp - b.timestamp;
+    }
 
     toString() {
       return '[Timestamp]';
@@ -5447,7 +5584,7 @@ module.exports = (() => {
   return Timestamp;
 })();
 
-},{"./assert":38,"./is":41,"moment-timezone":79}],37:[function(require,module,exports){
+},{"./assert":38,"./is":41,"moment-timezone":80}],37:[function(require,module,exports){
 const assert = require('./assert'),
       is = require('./is');
 
@@ -5690,7 +5827,8 @@ module.exports = (() => {
     },
 
     /**
-     * Set difference operation (using strict equality).
+     * Set difference operation, returning any item in "a" that is not
+     * contained in "b" (using strict equality).
      *
      * @static
      * @param {Array} a
@@ -5702,7 +5840,8 @@ module.exports = (() => {
     },
 
     /**
-     * Set difference operation, where the uniqueness is determined by a delegate.
+     * Set difference operation, returning any item in "a" that is not
+     * contained in "b" (where the uniqueness is determined by a delegate).
      *
      * @static
      * @param {Array} a
@@ -5868,25 +6007,72 @@ module.exports = (() => {
       } else if (comparator(item, a[0]) < 0) {
         a.unshift(item);
       } else {
-        a.splice(binarySearch(a, item, comparator, 0, a.length - 1), 0, item);
+        a.splice(binarySearchForInsert(a, item, comparator, 0, a.length - 1), 0, item);
       }
 
       return a;
+    },
+
+    /**
+     * Performs a binary search to locate an item within an array.
+     *
+     * @param {*[]} a
+     * @param {*} key
+     * @param {Function} comparator
+     * @param {Number=} start
+     * @param {Number=} end
+     * @returns {*|null}
+     */
+    binarySearch(a, key, comparator, start, end) {
+      assert.argumentIsArray(a, 'a');
+      assert.argumentIsRequired(comparator, 'comparator', Function);
+      assert.argumentIsOptional(start, 'start', Number);
+      assert.argumentIsOptional(end, 'end', Number);
+
+      if (a.length === 0) {
+        return null;
+      }
+
+      return binarySearchForMatch(a, key, comparator, start || 0, end || a.length - 1);
     }
 
   };
 
-  function binarySearch(array, item, comparator, start, end) {
+  function binarySearchForMatch(a, key, comparator, start, end) {
     const size = end - start;
     const midpointIndex = start + Math.floor(size / 2);
-    const midpointItem = array[midpointIndex];
+    const midpointItem = a[midpointIndex];
+    const comparison = comparator(key, midpointItem);
+
+    if (comparison === 0) {
+      return midpointItem;
+    } else if (size < 2) {
+      const finalIndex = a.length - 1;
+      const finalItem = a[finalIndex];
+
+      if (end === finalIndex && comparator(key, finalItem) === 0) {
+        return finalItem;
+      } else {
+        return null;
+      }
+    } else if (comparison > 0) {
+      return binarySearchForMatch(a, key, comparator, midpointIndex, end);
+    } else {
+      return binarySearchForMatch(a, key, comparator, start, midpointIndex);
+    }
+  }
+
+  function binarySearchForInsert(a, item, comparator, start, end) {
+    const size = end - start;
+    const midpointIndex = start + Math.floor(size / 2);
+    const midpointItem = a[midpointIndex];
     const comparison = comparator(item, midpointItem) > 0;
 
     if (size < 2) {
       if (comparison > 0) {
-        const finalIndex = array.length - 1;
+        const finalIndex = a.length - 1;
 
-        if (end === finalIndex && comparator(item, array[finalIndex]) > 0) {
+        if (end === finalIndex && comparator(item, a[finalIndex]) > 0) {
           return end + 1;
         } else {
           return end;
@@ -5895,9 +6081,9 @@ module.exports = (() => {
         return start;
       }
     } else if (comparison > 0) {
-      return binarySearch(array, item, comparator, midpointIndex, end);
+      return binarySearchForInsert(a, item, comparator, midpointIndex, end);
     } else {
-      return binarySearch(array, item, comparator, start, midpointIndex);
+      return binarySearchForInsert(a, item, comparator, start, midpointIndex);
     }
   }
 })();
@@ -6645,37 +6831,32 @@ module.exports = (() => {
    */
 
   return {
-    timeout(promise, timeout) {
+    /**
+     * Creates a composite promise which resolves normally or rejects is a specified
+     * amount of time elapses.
+     *
+     * @public
+     * @static
+     * @param {Promise} promise
+     * @param {Number} milliseconds
+     * @param {String=} description
+     * @returns {Promise<*>}
+     */
+    timeout(promise, milliseconds, description) {
       return Promise.resolve().then(() => {
         assert.argumentIsRequired(promise, 'promise', Promise, 'Promise');
-        assert.argumentIsRequired(timeout, 'timeout', Number);
+        assert.argumentIsRequired(milliseconds, 'milliseconds', Number);
+        assert.argumentIsOptional(description, 'description', String);
 
-        if (!(timeout > 0)) {
-          throw new Error('Promise timeout must be greater than zero.');
+        if (!(milliseconds > 0)) {
+          return Promise.reject('Unable to configure promise timeout, the "milliseconds" argument must be positive');
         }
 
-        return this.build((resolveCallback, rejectCallback) => {
-          let pending = true;
-          let token = setTimeout(() => {
-            if (pending) {
-              pending = false;
-              rejectCallback(`Promise timed out after ${timeout} milliseconds`);
-            }
-          }, timeout);
-          promise.then(result => {
-            if (pending) {
-              pending = false;
-              clearTimeout(token);
-              resolveCallback(result);
-            }
-          }).catch(error => {
-            if (pending) {
-              pending = false;
-              clearTimeout(token);
-              rejectCallback(error);
-            }
-          });
-        });
+        return Promise.race([promise, this.build((resolveCallback, rejectCallback) => {
+          setTimeout(() => {
+            rejectCallback(description || `Promise timed out after ${milliseconds} milliseconds`);
+          }, milliseconds);
+        })]);
       });
     },
 
@@ -7239,7 +7420,7 @@ module.exports = (() => {
   return DataType;
 })();
 
-},{"./../../lang/AdHoc":29,"./../../lang/Day":31,"./../../lang/Decimal":32,"./../../lang/Enum":34,"./../../lang/Timestamp":36,"./../../lang/assert":38,"./../../lang/is":41,"moment":81}],47:[function(require,module,exports){
+},{"./../../lang/AdHoc":29,"./../../lang/Day":31,"./../../lang/Decimal":32,"./../../lang/Enum":34,"./../../lang/Timestamp":36,"./../../lang/assert":38,"./../../lang/is":41,"moment":82}],47:[function(require,module,exports){
 module.exports = (() => {
   'use strict';
   /**
@@ -7820,6 +8001,16 @@ module.exports = (() => {
       });
     }
 
+    static backoff(actionToBackoff, millisecondDelay, actionDescription, maximumAttempts) {
+      return Promise.resolve().then(() => {
+        const scheduler = new Scheduler();
+        return scheduler.backoff(actionToBackoff, millisecondDelay, actionDescription, maximumAttempts).catch(e => {
+          scheduler.dispose();
+          return Promise.reject(e);
+        });
+      });
+    }
+
     toString() {
       return '[Scheduler]';
     }
@@ -7836,6 +8027,7 @@ module.exports = require('./lib/axios');
 
 var utils = require('./../utils');
 var settle = require('./../core/settle');
+var cookies = require('./../helpers/cookies');
 var buildURL = require('./../helpers/buildURL');
 var buildFullPath = require('../core/buildFullPath');
 var parseHeaders = require('./../helpers/parseHeaders');
@@ -7856,7 +8048,7 @@ module.exports = function xhrAdapter(config) {
     // HTTP basic authentication
     if (config.auth) {
       var username = config.auth.username || '';
-      var password = config.auth.password || '';
+      var password = config.auth.password ? unescape(encodeURIComponent(config.auth.password)) : '';
       requestHeaders.Authorization = 'Basic ' + btoa(username + ':' + password);
     }
 
@@ -7937,8 +8129,6 @@ module.exports = function xhrAdapter(config) {
     // This is only done if running in a standard browser environment.
     // Specifically not if we're in a web worker, or react-native.
     if (utils.isStandardBrowserEnv()) {
-      var cookies = require('./../helpers/cookies');
-
       // Add xsrf header
       var xsrfValue = (config.withCredentials || isURLSameOrigin(fullPath)) && config.xsrfCookieName ?
         cookies.read(config.xsrfCookieName) :
@@ -8004,7 +8194,7 @@ module.exports = function xhrAdapter(config) {
       });
     }
 
-    if (requestData === undefined) {
+    if (!requestData) {
       requestData = null;
     }
 
@@ -8013,7 +8203,7 @@ module.exports = function xhrAdapter(config) {
   });
 };
 
-},{"../core/buildFullPath":58,"../core/createError":59,"./../core/settle":63,"./../helpers/buildURL":67,"./../helpers/cookies":69,"./../helpers/isURLSameOrigin":71,"./../helpers/parseHeaders":73,"./../utils":75}],52:[function(require,module,exports){
+},{"../core/buildFullPath":58,"../core/createError":59,"./../core/settle":63,"./../helpers/buildURL":67,"./../helpers/cookies":69,"./../helpers/isURLSameOrigin":72,"./../helpers/parseHeaders":74,"./../utils":76}],52:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -8063,12 +8253,15 @@ axios.all = function all(promises) {
 };
 axios.spread = require('./helpers/spread');
 
+// Expose isAxiosError
+axios.isAxiosError = require('./helpers/isAxiosError');
+
 module.exports = axios;
 
 // Allow use of default import syntax in TypeScript
 module.exports.default = axios;
 
-},{"./cancel/Cancel":53,"./cancel/CancelToken":54,"./cancel/isCancel":55,"./core/Axios":56,"./core/mergeConfig":62,"./defaults":65,"./helpers/bind":66,"./helpers/spread":74,"./utils":75}],53:[function(require,module,exports){
+},{"./cancel/Cancel":53,"./cancel/CancelToken":54,"./cancel/isCancel":55,"./core/Axios":56,"./core/mergeConfig":62,"./defaults":65,"./helpers/bind":66,"./helpers/isAxiosError":71,"./helpers/spread":75,"./utils":76}],53:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8231,9 +8424,10 @@ Axios.prototype.getUri = function getUri(config) {
 utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
   /*eslint func-names:0*/
   Axios.prototype[method] = function(url, config) {
-    return this.request(utils.merge(config || {}, {
+    return this.request(mergeConfig(config || {}, {
       method: method,
-      url: url
+      url: url,
+      data: (config || {}).data
     }));
   };
 });
@@ -8241,7 +8435,7 @@ utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData
 utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
   /*eslint func-names:0*/
   Axios.prototype[method] = function(url, data, config) {
-    return this.request(utils.merge(config || {}, {
+    return this.request(mergeConfig(config || {}, {
       method: method,
       url: url,
       data: data
@@ -8251,7 +8445,7 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 
 module.exports = Axios;
 
-},{"../helpers/buildURL":67,"./../utils":75,"./InterceptorManager":57,"./dispatchRequest":60,"./mergeConfig":62}],57:[function(require,module,exports){
+},{"../helpers/buildURL":67,"./../utils":76,"./InterceptorManager":57,"./dispatchRequest":60,"./mergeConfig":62}],57:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8305,7 +8499,7 @@ InterceptorManager.prototype.forEach = function forEach(fn) {
 
 module.exports = InterceptorManager;
 
-},{"./../utils":75}],58:[function(require,module,exports){
+},{"./../utils":76}],58:[function(require,module,exports){
 'use strict';
 
 var isAbsoluteURL = require('../helpers/isAbsoluteURL');
@@ -8428,7 +8622,7 @@ module.exports = function dispatchRequest(config) {
   });
 };
 
-},{"../cancel/isCancel":55,"../defaults":65,"./../utils":75,"./transformData":64}],61:[function(require,module,exports){
+},{"../cancel/isCancel":55,"../defaults":65,"./../utils":76,"./transformData":64}],61:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8451,7 +8645,7 @@ module.exports = function enhanceError(error, config, code, request, response) {
   error.response = response;
   error.isAxiosError = true;
 
-  error.toJSON = function() {
+  error.toJSON = function toJSON() {
     return {
       // Standard
       message: this.message,
@@ -8490,64 +8684,78 @@ module.exports = function mergeConfig(config1, config2) {
   config2 = config2 || {};
   var config = {};
 
-  var valueFromConfig2Keys = ['url', 'method', 'params', 'data'];
-  var mergeDeepPropertiesKeys = ['headers', 'auth', 'proxy'];
+  var valueFromConfig2Keys = ['url', 'method', 'data'];
+  var mergeDeepPropertiesKeys = ['headers', 'auth', 'proxy', 'params'];
   var defaultToConfig2Keys = [
-    'baseURL', 'url', 'transformRequest', 'transformResponse', 'paramsSerializer',
-    'timeout', 'withCredentials', 'adapter', 'responseType', 'xsrfCookieName',
-    'xsrfHeaderName', 'onUploadProgress', 'onDownloadProgress',
-    'maxContentLength', 'validateStatus', 'maxRedirects', 'httpAgent',
-    'httpsAgent', 'cancelToken', 'socketPath'
+    'baseURL', 'transformRequest', 'transformResponse', 'paramsSerializer',
+    'timeout', 'timeoutMessage', 'withCredentials', 'adapter', 'responseType', 'xsrfCookieName',
+    'xsrfHeaderName', 'onUploadProgress', 'onDownloadProgress', 'decompress',
+    'maxContentLength', 'maxBodyLength', 'maxRedirects', 'transport', 'httpAgent',
+    'httpsAgent', 'cancelToken', 'socketPath', 'responseEncoding'
   ];
+  var directMergeKeys = ['validateStatus'];
+
+  function getMergedValue(target, source) {
+    if (utils.isPlainObject(target) && utils.isPlainObject(source)) {
+      return utils.merge(target, source);
+    } else if (utils.isPlainObject(source)) {
+      return utils.merge({}, source);
+    } else if (utils.isArray(source)) {
+      return source.slice();
+    }
+    return source;
+  }
+
+  function mergeDeepProperties(prop) {
+    if (!utils.isUndefined(config2[prop])) {
+      config[prop] = getMergedValue(config1[prop], config2[prop]);
+    } else if (!utils.isUndefined(config1[prop])) {
+      config[prop] = getMergedValue(undefined, config1[prop]);
+    }
+  }
 
   utils.forEach(valueFromConfig2Keys, function valueFromConfig2(prop) {
-    if (typeof config2[prop] !== 'undefined') {
-      config[prop] = config2[prop];
+    if (!utils.isUndefined(config2[prop])) {
+      config[prop] = getMergedValue(undefined, config2[prop]);
     }
   });
 
-  utils.forEach(mergeDeepPropertiesKeys, function mergeDeepProperties(prop) {
-    if (utils.isObject(config2[prop])) {
-      config[prop] = utils.deepMerge(config1[prop], config2[prop]);
-    } else if (typeof config2[prop] !== 'undefined') {
-      config[prop] = config2[prop];
-    } else if (utils.isObject(config1[prop])) {
-      config[prop] = utils.deepMerge(config1[prop]);
-    } else if (typeof config1[prop] !== 'undefined') {
-      config[prop] = config1[prop];
-    }
-  });
+  utils.forEach(mergeDeepPropertiesKeys, mergeDeepProperties);
 
   utils.forEach(defaultToConfig2Keys, function defaultToConfig2(prop) {
-    if (typeof config2[prop] !== 'undefined') {
-      config[prop] = config2[prop];
-    } else if (typeof config1[prop] !== 'undefined') {
-      config[prop] = config1[prop];
+    if (!utils.isUndefined(config2[prop])) {
+      config[prop] = getMergedValue(undefined, config2[prop]);
+    } else if (!utils.isUndefined(config1[prop])) {
+      config[prop] = getMergedValue(undefined, config1[prop]);
+    }
+  });
+
+  utils.forEach(directMergeKeys, function merge(prop) {
+    if (prop in config2) {
+      config[prop] = getMergedValue(config1[prop], config2[prop]);
+    } else if (prop in config1) {
+      config[prop] = getMergedValue(undefined, config1[prop]);
     }
   });
 
   var axiosKeys = valueFromConfig2Keys
     .concat(mergeDeepPropertiesKeys)
-    .concat(defaultToConfig2Keys);
+    .concat(defaultToConfig2Keys)
+    .concat(directMergeKeys);
 
   var otherKeys = Object
-    .keys(config2)
+    .keys(config1)
+    .concat(Object.keys(config2))
     .filter(function filterAxiosKeys(key) {
       return axiosKeys.indexOf(key) === -1;
     });
 
-  utils.forEach(otherKeys, function otherKeysDefaultToConfig2(prop) {
-    if (typeof config2[prop] !== 'undefined') {
-      config[prop] = config2[prop];
-    } else if (typeof config1[prop] !== 'undefined') {
-      config[prop] = config1[prop];
-    }
-  });
+  utils.forEach(otherKeys, mergeDeepProperties);
 
   return config;
 };
 
-},{"../utils":75}],63:[function(require,module,exports){
+},{"../utils":76}],63:[function(require,module,exports){
 'use strict';
 
 var createError = require('./createError');
@@ -8561,7 +8769,7 @@ var createError = require('./createError');
  */
 module.exports = function settle(resolve, reject, response) {
   var validateStatus = response.config.validateStatus;
-  if (!validateStatus || validateStatus(response.status)) {
+  if (!response.status || !validateStatus || validateStatus(response.status)) {
     resolve(response);
   } else {
     reject(createError(
@@ -8596,8 +8804,8 @@ module.exports = function transformData(data, headers, fns) {
   return data;
 };
 
-},{"./../utils":75}],65:[function(require,module,exports){
-(function (process){
+},{"./../utils":76}],65:[function(require,module,exports){
+(function (process){(function (){
 'use strict';
 
 var utils = require('./utils');
@@ -8674,6 +8882,7 @@ var defaults = {
   xsrfHeaderName: 'X-XSRF-TOKEN',
 
   maxContentLength: -1,
+  maxBodyLength: -1,
 
   validateStatus: function validateStatus(status) {
     return status >= 200 && status < 300;
@@ -8696,8 +8905,8 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 
 module.exports = defaults;
 
-}).call(this,require('_process'))
-},{"./adapters/http":51,"./adapters/xhr":51,"./helpers/normalizeHeaderName":72,"./utils":75,"_process":77}],66:[function(require,module,exports){
+}).call(this)}).call(this,require('_process'))
+},{"./adapters/http":51,"./adapters/xhr":51,"./helpers/normalizeHeaderName":73,"./utils":76,"_process":78}],66:[function(require,module,exports){
 'use strict';
 
 module.exports = function bind(fn, thisArg) {
@@ -8717,7 +8926,6 @@ var utils = require('./../utils');
 
 function encode(val) {
   return encodeURIComponent(val).
-    replace(/%40/gi, '@').
     replace(/%3A/gi, ':').
     replace(/%24/g, '$').
     replace(/%2C/gi, ',').
@@ -8783,7 +8991,7 @@ module.exports = function buildURL(url, params, paramsSerializer) {
   return url;
 };
 
-},{"./../utils":75}],68:[function(require,module,exports){
+},{"./../utils":76}],68:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8854,7 +9062,7 @@ module.exports = (
     })()
 );
 
-},{"./../utils":75}],70:[function(require,module,exports){
+},{"./../utils":76}],70:[function(require,module,exports){
 'use strict';
 
 /**
@@ -8871,6 +9079,19 @@ module.exports = function isAbsoluteURL(url) {
 };
 
 },{}],71:[function(require,module,exports){
+'use strict';
+
+/**
+ * Determines whether the payload is an error thrown by Axios
+ *
+ * @param {*} payload The value to test
+ * @returns {boolean} True if the payload is an error thrown by Axios, otherwise false
+ */
+module.exports = function isAxiosError(payload) {
+  return (typeof payload === 'object') && (payload.isAxiosError === true);
+};
+
+},{}],72:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -8940,7 +9161,7 @@ module.exports = (
     })()
 );
 
-},{"./../utils":75}],72:[function(require,module,exports){
+},{"./../utils":76}],73:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -8954,7 +9175,7 @@ module.exports = function normalizeHeaderName(headers, normalizedName) {
   });
 };
 
-},{"../utils":75}],73:[function(require,module,exports){
+},{"../utils":76}],74:[function(require,module,exports){
 'use strict';
 
 var utils = require('./../utils');
@@ -9009,7 +9230,7 @@ module.exports = function parseHeaders(headers) {
   return parsed;
 };
 
-},{"./../utils":75}],74:[function(require,module,exports){
+},{"./../utils":76}],75:[function(require,module,exports){
 'use strict';
 
 /**
@@ -9038,7 +9259,7 @@ module.exports = function spread(callback) {
   };
 };
 
-},{}],75:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 'use strict';
 
 var bind = require('./helpers/bind');
@@ -9144,6 +9365,21 @@ function isNumber(val) {
  */
 function isObject(val) {
   return val !== null && typeof val === 'object';
+}
+
+/**
+ * Determine if a value is a plain Object
+ *
+ * @param {Object} val The value to test
+ * @return {boolean} True if value is a plain Object, otherwise false
+ */
+function isPlainObject(val) {
+  if (toString.call(val) !== '[object Object]') {
+    return false;
+  }
+
+  var prototype = Object.getPrototypeOf(val);
+  return prototype === null || prototype === Object.prototype;
 }
 
 /**
@@ -9302,34 +9538,12 @@ function forEach(obj, fn) {
 function merge(/* obj1, obj2, obj3, ... */) {
   var result = {};
   function assignValue(val, key) {
-    if (typeof result[key] === 'object' && typeof val === 'object') {
+    if (isPlainObject(result[key]) && isPlainObject(val)) {
       result[key] = merge(result[key], val);
-    } else {
-      result[key] = val;
-    }
-  }
-
-  for (var i = 0, l = arguments.length; i < l; i++) {
-    forEach(arguments[i], assignValue);
-  }
-  return result;
-}
-
-/**
- * Function equal to merge with the difference being that no reference
- * to original objects is kept.
- *
- * @see merge
- * @param {Object} obj1 Object to merge
- * @returns {Object} Result of all merge properties
- */
-function deepMerge(/* obj1, obj2, obj3, ... */) {
-  var result = {};
-  function assignValue(val, key) {
-    if (typeof result[key] === 'object' && typeof val === 'object') {
-      result[key] = deepMerge(result[key], val);
-    } else if (typeof val === 'object') {
-      result[key] = deepMerge({}, val);
+    } else if (isPlainObject(val)) {
+      result[key] = merge({}, val);
+    } else if (isArray(val)) {
+      result[key] = val.slice();
     } else {
       result[key] = val;
     }
@@ -9360,6 +9574,19 @@ function extend(a, b, thisArg) {
   return a;
 }
 
+/**
+ * Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
+ *
+ * @param {string} content with BOM
+ * @return {string} content value without BOM
+ */
+function stripBOM(content) {
+  if (content.charCodeAt(0) === 0xFEFF) {
+    content = content.slice(1);
+  }
+  return content;
+}
+
 module.exports = {
   isArray: isArray,
   isArrayBuffer: isArrayBuffer,
@@ -9369,6 +9596,7 @@ module.exports = {
   isString: isString,
   isNumber: isNumber,
   isObject: isObject,
+  isPlainObject: isPlainObject,
   isUndefined: isUndefined,
   isDate: isDate,
   isFile: isFile,
@@ -9379,12 +9607,12 @@ module.exports = {
   isStandardBrowserEnv: isStandardBrowserEnv,
   forEach: forEach,
   merge: merge,
-  deepMerge: deepMerge,
   extend: extend,
-  trim: trim
+  trim: trim,
+  stripBOM: stripBOM
 };
 
-},{"./helpers/bind":66}],76:[function(require,module,exports){
+},{"./helpers/bind":66}],77:[function(require,module,exports){
 /*
  *  big.js v5.2.2
  *  A small, fast, easy-to-use library for arbitrary-precision decimal arithmetic.
@@ -10327,7 +10555,7 @@ module.exports = {
   }
 })(this);
 
-},{}],77:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -10513,7 +10741,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],78:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 module.exports={
 	"version": "2019b",
 	"zones": [
@@ -11114,11 +11342,11 @@ module.exports={
 		"Pacific/Tarawa|Pacific/Wallis"
 	]
 }
-},{}],79:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 var moment = module.exports = require("./moment-timezone");
 moment.tz.load(require('./data/packed/latest.json'));
 
-},{"./data/packed/latest.json":78,"./moment-timezone":80}],80:[function(require,module,exports){
+},{"./data/packed/latest.json":79,"./moment-timezone":81}],81:[function(require,module,exports){
 //! moment-timezone.js
 //! version : 0.5.26
 //! Copyright (c) JS Foundation and other contributors
@@ -11747,7 +11975,7 @@ moment.tz.load(require('./data/packed/latest.json'));
 	return moment;
 }));
 
-},{"moment":81}],81:[function(require,module,exports){
+},{"moment":82}],82:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
