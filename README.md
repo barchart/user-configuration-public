@@ -1,4 +1,4 @@
-# @barchart/user-configuration-client-js
+# @barchart/user-configuration-public
 
 [![AWS CodeBuild](https://codebuild.us-east-1.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoicisyc2F1SERKVlFRTEdmTk95cDBtZkdDTjdqVU93MlBHcjhJUkxlVk5DajdFNzhoeStxUWM1NjUvMWpKNTI0UjBHWTFka3lVck01K2FvV2RpYjJzSlJVPSIsIml2UGFyYW1ldGVyU3BlYyI6InY0dmNKZVBkWlFXUFFld0IiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master)](https://github.com/barchart/user-configuration-client-js)
 
@@ -10,7 +10,7 @@ Also, the User Preference Service provides **simple REST API**, if you prefer to
 
 Complete documentation can be found here:
 
-http://barchart.github.io/user-configuration-client-js/
+http://barchart.github.io/user-configuration-public/
 
 ### Package Managers
 
