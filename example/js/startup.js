@@ -3,7 +3,7 @@ const version = require('./../../lib/index').version;
 const JwtProvider = require('./../../lib/security/JwtProvider'),
 	UserConfigurationGateway = require('./../../lib/gateway/UserConfigurationGateway');
 
-module.exports = (() => {
+(() => {
 	'use strict';
 
 	var PageModel = function() {
