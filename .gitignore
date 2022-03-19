@@ -4,5 +4,3 @@ aws
 
 .gitignore
 .DS_Store
-
-yarn.lock
