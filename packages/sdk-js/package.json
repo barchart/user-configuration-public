@@ -1,0 +1,50 @@
+{
+  "name": "@barchart/user-configuration-client-js",
+  "version": "2.3.2",
+  "description": "JavaScript SDK for Barchart's User Preference Service",
+  "homepage": "https://github.com/barchart/user-configuration-client-js#readme",
+  "author": {
+    "name": "Bryan Ingle",
+    "email": "bryan.ingle@barchart.com",
+    "url": "https://www.barchart.com"
+  },
+  "scripts": {
+    "lint": "gulp lint",
+    "postversion": "lerna publish from-package",
+    "version": "gulp embed-version"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/barchart/user-configuration-client-js.git"
+  },
+  "keywords": [
+    "Barchart",
+    "JavaScript",
+    "Client",
+    "SDK"
+  ],
+  "dependencies": {
+    "@barchart/common-js": "^4.9.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.11.1",
+    "babelify": "^10.0.0",
+    "browserify": "^16.5.2",
+    "gulp": "^4.0.2",
+    "gulp-git": "^2.9.0",
+    "gulp-jshint": "~2.1.0",
+    "gulp-replace": "^0.5.4",
+    "jshint": "^2.12.0",
+    "merge-stream": "^2.0.0",
+    "vinyl-buffer": "^1.0.1",
+    "vinyl-source-stream": "^2.0.0"
+  },
+  "browserify": {
+    "transform": [
+      [
+        "babelify"
+      ]
+    ]
+  },
+  "license": "MIT"
+}
