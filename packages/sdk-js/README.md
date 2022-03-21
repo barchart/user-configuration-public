@@ -1,4 +1,6 @@
-# @barchart/user-configuration-public
+# @barchart/user-configuration-client-js
+
+[![NPM](https://img.shields.io/npm/v/@barchart/user-configuration-client-js)](https://www.npmjs.com/package/@barchart/user-configuration-client-js)
 
 This **JavaScript SDK** connects your applications to the _Barchart User Preference Service_ — a simple tool for saving and retrieving ad hoc user preference data.
 
